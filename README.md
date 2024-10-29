@@ -43,7 +43,7 @@ The `network` input is expected as a JSON array containing network details, each
 In your GitHub workflow file, you can set up this action as follows:
 
 ```yaml
-name: deploy with BuildBear
+name: deploy to BuildBear Sandbox
 
 on: [push]
 
