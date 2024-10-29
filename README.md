@@ -66,7 +66,7 @@ jobs:
         run: forge --version
 
       - name: Run BB Action CI
-        uses: arjunbuildbear/test2@30
+        uses: BuildBearLabs/buildbear_x_action@v1.0.0
         with: 
           network: |
             [

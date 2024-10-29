@@ -1,0 +1,25 @@
+name: 'bb_ci'
+description: 'automate smart contract deployments across multiple networks using BuildBear’s sandbox'
+
+inputs:
+  network:
+    description: 'List of networks you want to deploy on'
+    required: true
+  deployCmd:
+    description: 'Command to deploy the contract'
+    required: true
+  buildbear_token: 
+    description: "Buildbear API token"
+    required: true
+
+outputs:
+  deployments:
+    description: 'deployments logs'
+     
+runs:
+  using: 'node20'
+  main: 'index.js'
+
+branding:
+  icon: 'bold'
+  color: 'green'  
