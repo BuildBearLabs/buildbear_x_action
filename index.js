@@ -238,7 +238,8 @@ async function checkNodeLiveness(url, maxRetries = 10, delay = 5000) {
  */
 async function executeDeploy(deployCmd) {
   try {
-    const { stdout, stderr } = await execAsync(deployCmd);
+    console.log("Max Buffer is 10000kb");
+    const { stdout, stderr } = await execAsync(deployCmd, {maxBuffer: 1024 * 10000});
     console.log(`Deploy command output: ${stdout}`);
     if (stderr) {
       console.warn(`Deploy command stderr: ${stderr}`);
