@@ -270,14 +270,19 @@ async function executeDeploy(deployCmd) {
     for (const net of network) {
 
       console.log(`\n🔄 Processing network with chainId: ${net.chainId}`);
+      
       let blockNumber;
-
-      if (net.blockNumber === undefined || net.blockNumber === ""){
-        blockNumber = await getLatestBlockNumber(parseInt(net.chainId))
-         console.log(blockNumber)
+      
+      
+      if (net.blockNumber === undefined) {
+        // If blockNumber is not present in the network object, retrieve the latest block number
+        blockNumber = await getLatestBlockNumber(parseInt(net.chainId));
+      } else {
+        // If blockNumber is present in the network object, use it
+        blockNumber = net.blockNumber;  
       }
 
-      console.log(blockNumber)
+      console.log(`Block number for chainId ${net.chainId}: ${blockNumber}`);
       // Create node
       const { url: rpcUrl, sandboxId } = await createNode(
         repoName,
