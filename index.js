@@ -1,15 +1,11 @@
 const core = require('@actions/core');
 const github = require('@actions/github');
 const { default: axios } = require('axios');
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const { randomBytes } = require('crypto');
-const util = require('util');
 const fs = require('fs').promises;
 const path = require('path');
 const { getLatestBlockNumber } = require('./network');
-
-// Promisify exec for better async/await usage
-const execAsync = util.promisify(exec);
 
 // Default mnemonic to be used as environment variable
 const DEFAULT_MNEMONIC = "test test test test test test test test test test test junk";
@@ -237,18 +233,22 @@ async function checkNodeLiveness(url, maxRetries = 10, delay = 5000) {
  * @param {string} deployCmd - The command to deploy the contracts
  */
 async function executeDeploy(deployCmd) {
-  try {
-    console.log("Max Buffer is 10000kb");
-    const { stdout, stderr } = await execAsync(deployCmd, {maxBuffer: 1024 * 10000});
-    console.log(`Deploy command output: ${stdout}`);
-    if (stderr) {
-      console.warn(`Deploy command stderr: ${stderr}`);
-    }
-    console.log('Deployment completed successfully');
-  } catch (error) {
-    console.error(`Error executing deploy command: ${error.message}`);
-    core.setFailed(error.message);
-  }
+  const promise = new Promise((resolve, _) => {
+    const child = spawn(deployCmd, { shell: true });
+    child.stdout.pipe(process.stdout);
+    child.stderr.pipe(process.stderr);
+    child.on('exit', (code, _) => {
+      if (code == 1) {
+        console.error(`Executing the deploy command failed`);
+        core.setFailed(`Executing the deploy command failed`);
+      } else {
+        console.log('Deployment completed successfully');
+      }
+      resolve();
+    });
+  });
+  
+  await promise;
 }
 
 
