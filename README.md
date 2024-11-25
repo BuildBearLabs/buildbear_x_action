@@ -10,11 +10,12 @@ This GitHub Action allows you to automate smart contract deployments across mult
 
 ## 🛠️ Inputs
 
-| Name             | Description                        | Required |
-| ---------------- | ---------------------------------- | -------- |
-| `network`        | List of networks to deploy on, with `chainId` and optional `blockNumber`. Example format provided below. | `true`   |
-| `deployCmd`      | Command to deploy the contract, such as `make deploy`. | `true`   |
-| `buildbear_token`| Your BuildBear API token for authentication. | `true`   |
+| Name               | Description                                                                                              | Required |
+| ------------------ | -------------------------------------------------------------------------------------------------------- | -------- |
+| `network`          | List of networks to deploy on, with `chainId` and optional `blockNumber`. Example format provided below. | `true`   |
+| `deploy-command`   | Command to deploy the contract, such as `make deploy`.                                                   | `true`   |
+| `buildbear-token`  | Your BuildBear API token for authentication.                                                             | `true`   |
+| `working-directory`| Path to the directory containing the project. Default is the root directory.                             | `false`  |
 
 ### Example `network` Input Format
 
@@ -67,7 +68,7 @@ jobs:
 
       - name: Run BB Action CI
         uses: BuildBearLabs/buildbear_x_action@v1.0.0
-        with: 
+        with:
           network: |
             [
               {
@@ -78,20 +79,20 @@ jobs:
                 "chainId": 10
               }
             ]
-          deployCmd: "make deploy"
-          buildbear_token: "${{ secrets.BUILDBEAR_TOKEN }}"
+          deploy-command: "make deploy"
+          buildbear-token: "${{ secrets.BUILDBEAR_TOKEN }}"
 ```
 
-> **Note:** Ensure that the `buildbear_token` is securely stored as a secret in your GitHub repository under `BUILDBEAR_TOKEN`.
+> **Note:** Ensure that the `buildbear-token` is securely stored as a secret in your GitHub repository under `BUILDBEAR_TOKEN`.
 
 ## 📚 Tutorial
 
 1. **Set up GitHub Secrets**: Add your BuildBear API token as a secret in your repository settings.
 2. **Define Networks**: In the `network` input, specify the networks and optional block numbers for deployment.
-3. **Add Deployment Command**: Define the deployment command under `deployCmd`.
+3. **Add Deployment Command**: Define the deployment command under `deploy-command`.
 4. **Run Workflow**: Trigger the workflow on push or any specified event to deploy contracts on the selected networks.
 
 ## 📘 Additional Notes
 
-- Ensure the `deployCmd` matches the command in your project for deploying contracts.
-- This action requires Node.js 20 (`node20`) to run the main deployment script. 
+- Ensure the `deploy-command` matches the command in your project for deploying contracts.
+- This action requires Node.js 20 (`node20`) to run the main deployment script.
