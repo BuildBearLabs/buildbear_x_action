@@ -33,6 +33,13 @@ The `network` input is expected as a JSON array containing network details, each
 ]
 ```
 
+## 🌐 Runtime Environment Variables  
+
+During the execution of this action, the following environment variables are available:
+
+- **`BUILDBEAR_RPC_URL`**: The RPC URL provided by BuildBear, enabling connections to the sandbox.  
+- **`MNEMONIC`**: A 12- or 24-word mnemonic phrase used for signing transactions during deployment.  
+
 ## 📤 Outputs
 
 | Name          | Description              |
