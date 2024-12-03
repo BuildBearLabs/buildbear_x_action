@@ -1,7 +1,9 @@
 name: "bb_ci"
 description: "automate smart contract deployments across multiple networks using BuildBear’s sandbox"
 
-inputs:
+inputs:               - name: bb_ci
+                uses: BuildBearLabs/buildbear_x_action@v1.3.0
+            
   network:
     description: "List of networks you want to deploy on"
     required: true
