@@ -260,8 +260,39 @@ async function executeDeploy(deployCmd, workingDir) {
   await promise;
 }
 
+/**
+ * Sends deployment notification to the backend service
+ * @param {Object} deploymentData - The deployment data to send
+ */
+async function sendNotificationToBackend(deploymentData) {
+  try {
+    const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`;
+    const notificationEndpoint =
+      "https://backend.alpha.buildbear.io/internal/ci/notify";
+    const payload = {
+      repositoryName: github.context.repo.repo,
+      repositoryOwner: github.context.repo.owner,
+      actionUrl: githubActionUrl,
+      commitHash: github.context.sha,
+      workflow: github.context.workflow,
+      status: deploymentData.status,
+      summary: deploymentData.summary ?? "",
+      deployments: deploymentData.deployments ?? "",
+      timestamp: new Date().toISOString(),
+    };
+
+    await axios.post(notificationEndpoint, payload);
+  } catch (error) {
+    // Don't throw error to prevent action failure due to notification issues
+  }
+}
+
 (async () => {
   try {
+    let deploymentNotificationData = {
+      status: "deployment started",
+    };
+    await sendNotificationToBackend(deploymentNotificationData);
     // Get the input values
     const network = JSON.parse(core.getInput("network", { required: true }));
     const deployCmd = core.getInput("deploy-command", { required: true });
@@ -390,7 +421,20 @@ async function executeDeploy(deployCmd, workingDir) {
         console.log("\n" + "=".repeat(100));
       }
     });
+
+    deploymentNotificationData = {
+      status: "success",
+      deployments: allDeployments,
+    };
+    await sendNotificationToBackend(deploymentNotificationData);
   } catch (error) {
+    let deploymentNotificationData = {
+      status: "failed",
+      summary: `Deployment failed: ${error.message}`,
+      deployments: [],
+    };
+    await sendNotificationToBackend(deploymentNotificationData);
+
     core.setFailed(error.message);
   }
 })();
