@@ -423,15 +423,13 @@ async function sendNotificationToBackend(deploymentData) {
     });
 
     deploymentNotificationData = {
-      status: "success",
-      deployments: allDeployments,
+      status: "success"
     };
     await sendNotificationToBackend(deploymentNotificationData);
   } catch (error) {
     let deploymentNotificationData = {
       status: "failed",
-      summary: `Deployment failed: ${error.message}`,
-      deployments: [],
+      summary: `Deployment failed: ${error.message}`
     };
     await sendNotificationToBackend(deploymentNotificationData);
 
