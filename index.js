@@ -7,12 +7,12 @@ const fs = require("fs").promises;
 const path = require("path");
 const { getLatestBlockNumber } = require("./network");
 
-// Default mnemonic to be used as environment variable
-const DEFAULT_MNEMONIC =
-  "test test test test test test test test test test test junk";
+// // Default mnemonic to be used as environment variable
+// const DEFAULT_MNEMONIC =
+//   "test test test test test test test test test test test junk";
 
-// Export mnemonic as environment variable
-core.exportVariable("MNEMONIC", DEFAULT_MNEMONIC);
+// // Export mnemonic as environment variable
+// core.exportVariable("MNEMONIC", DEFAULT_MNEMONIC);
 
 /**
  * Recursively walk through directories
@@ -174,28 +174,38 @@ async function processBroadcastDirectory(chainId, workingDir) {
  * @returns {string} - The BuildBear RPC URL for the sandbox node
  */
 async function createNode(repoName, commitHash, chainId, blockNumber) {
-  const sandboxId = `${repoName}-${commitHash.slice(0, 8)}-${randomBytes(4).toString("hex")}`;
-  const url = `https://rpc-beta.buildbear.io/submit/${sandboxId}`;
+  try {
+    const sandboxId = `${repoName}-${commitHash.slice(0, 8)}-${randomBytes(4).toString("hex")}`;
+    const url = "https://api.dev.buildbear.io/v1/buildbear-sandbox";
+    const bearerToken = core.getInput("buildbear-token", { required: true });
 
-  const data = {
-    jsonrpc: "2.0",
-    id: 1,
-    method: "buildbearInternal_createNode",
-    params: [
-      {
-        fork: { id: chainId.toString(), blockNumber },
-        chainId: parseInt(chainId),
+    const data = {
+      chainId: Number(chainId),
+      nodeName: sandboxId.toString(),
+      blockNumber: blockNumber ? Number(blockNumber) : undefined,
+    };
+
+    const response = await axios.post(url, data, {
+      headers: {
+        Authorization: `Bearer ${bearerToken}`,
+        "Content-Type": "application/json",
       },
-    ],
-  };
+    });
 
-  await axios.post(url, data);
-
-  // Export RPC URL as environment variable for later use
-  core.exportVariable("BUILDBEAR_RPC_URL", url);
-  return { url, sandboxId };
+    core.exportVariable("BUILDBEAR_RPC_URL", response.data.rpcUrl);
+    core.exportVariable("MNEMONIC", response.data.mnemonic);
+    return {
+      url: response.data.rpcUrl,
+      sandboxId,
+    };
+  } catch (error) {
+    console.error(
+      "Error creating node:",
+      error.response?.data || error.message,
+    );
+    throw error;
+  }
 }
-
 /**
  * Checks if the node is ready by continuously polling for status.
  *
@@ -260,6 +270,24 @@ async function executeDeploy(deployCmd, workingDir) {
   await promise;
 }
 
+const extractContractData = (data) => {
+  const arrayData = Array.isArray(data) ? data : [data]; // Ensure data is an array
+
+  return arrayData.map((item) => ({
+    chainId: item.chainId || null,
+    rpcUrl: item.rpcUrl || null,
+    sandboxId: item.sandboxId || null,
+    transactions: Array.isArray(item.deployments?.transactions)
+      ? item.deployments.transactions
+          .filter((tx) => tx.contractName && tx.hash && tx.contractAddress) // Filter out incomplete transactions
+          .map((tx) => ({
+            contractName: tx.contractName,
+            hash: tx.hash,
+            contractAddress: tx.contractAddress,
+          }))
+      : [], // Default to an empty array if transactions are missing
+  }));
+};
 /**
  * Sends deployment notification to the backend service
  * @param {Object} deploymentData - The deployment data to send
@@ -268,7 +296,9 @@ async function sendNotificationToBackend(deploymentData) {
   try {
     const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`;
     const notificationEndpoint =
-      "https://backend.alpha.buildbear.io/internal/ci/notify";
+      "https://api.dev.buildbear.io/ci/deployment-notification";
+
+    const deployments = extractContractData(deploymentData.deployments);
     const payload = {
       repositoryName: github.context.repo.repo,
       repositoryOwner: github.context.repo.owner,
@@ -277,7 +307,7 @@ async function sendNotificationToBackend(deploymentData) {
       workflow: github.context.workflow,
       status: deploymentData.status,
       summary: deploymentData.summary ?? "",
-      deployments: deploymentData.deployments ?? "",
+      deployments: deployments ?? "",
       timestamp: new Date().toISOString(),
     };
 
@@ -423,13 +453,15 @@ async function sendNotificationToBackend(deploymentData) {
     });
 
     deploymentNotificationData = {
-      status: "success"
+      status: "success",
+      deployments: allDeployments,
     };
     await sendNotificationToBackend(deploymentNotificationData);
   } catch (error) {
     let deploymentNotificationData = {
       status: "failed",
-      summary: `Deployment failed: ${error.message}`
+      summary: `Deployment failed: ${error.message}`,
+      deployments: [],
     };
     await sendNotificationToBackend(deploymentNotificationData);
 
