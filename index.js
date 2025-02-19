@@ -176,7 +176,7 @@ async function processBroadcastDirectory(chainId, workingDir) {
 async function createNode(repoName, commitHash, chainId, blockNumber) {
   try {
     const sandboxId = `${repoName}-${commitHash.slice(0, 8)}-${randomBytes(4).toString("hex")}`;
-    const url = "https://api.dev.buildbear.io/v1/buildbear-sandbox";
+    const url = "https://api.buildbear.io/v1/buildbear-sandbox";
     const bearerToken = core.getInput("buildbear-token", { required: true });
 
     const data = {
@@ -270,6 +270,11 @@ async function executeDeploy(deployCmd, workingDir) {
   await promise;
 }
 
+/**
+ * Extracts relevant contract data for notification
+ * @param {Object|Array} data - Deployment data to extract from
+ * @returns {Array} - Array of extracted contract data
+ */
 const extractContractData = (data) => {
   const arrayData = Array.isArray(data) ? data : [data]; // Ensure data is an array
 
@@ -288,6 +293,7 @@ const extractContractData = (data) => {
       : [], // Default to an empty array if transactions are missing
   }));
 };
+
 /**
  * Sends deployment notification to the backend service
  * @param {Object} deploymentData - The deployment data to send
@@ -296,26 +302,75 @@ async function sendNotificationToBackend(deploymentData) {
   try {
     const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`;
     const notificationEndpoint =
-      "https://api.dev.buildbear.io/ci/deployment-notification";
+      "https://api.buildbear.io/ci/deployment-notification";
 
-    const deployments = extractContractData(deploymentData.deployments);
+    let status = deploymentData.status;
+    let summary = deploymentData.summary ?? "";
+    let deployments = [];
+
+    // Process deployment data if not "deployment started" or already "failed"
+    if (status !== "deployment started" && status !== "failed") {
+      // Extract contract data
+      deployments = extractContractData(deploymentData.deployments);
+
+      // Validate deployment success
+      const validation = validateDeployment(deployments);
+
+      if (!validation.valid) {
+        // Update status to failed if validation fails
+        status = "failed";
+        summary = validation.message;
+      }
+    }
+
     const payload = {
       repositoryName: github.context.repo.repo,
       repositoryOwner: github.context.repo.owner,
       actionUrl: githubActionUrl,
       commitHash: github.context.sha,
       workflow: github.context.workflow,
-      status: deploymentData.status,
-      summary: deploymentData.summary ?? "",
-      deployments: deployments ?? "",
+      status: status,
+      summary: summary,
+      deployments: deployments,
       timestamp: new Date().toISOString(),
     };
 
     await axios.post(notificationEndpoint, payload);
+
+    // If the status was changed to failed, we should fail the GitHub Action
+    if (status === "failed" && deploymentData.status !== "failed") {
+      core.setFailed(summary);
+    }
   } catch (error) {
     // Don't throw error to prevent action failure due to notification issues
   }
 }
+
+/**
+ * Validates if deployment was successful by checking if any valid transactions exist
+ * @param {Array} extractedData - Data extracted from deployments
+ * @returns {Object} - Validation result with status and message
+ */
+const validateDeployment = (extractedData) => {
+  // Check if we have any valid transactions across all deployments
+  const hasValidTransactions = extractedData.some(
+    (deployment) =>
+      deployment.transactions && deployment.transactions.length > 0,
+  );
+
+  if (!hasValidTransactions) {
+    return {
+      valid: false,
+      message:
+        "No contract deployments found. All transactions are missing required data.",
+    };
+  }
+
+  return {
+    valid: true,
+    message: "Deployment successful",
+  };
+};
 
 (async () => {
   try {
@@ -460,7 +515,7 @@ async function sendNotificationToBackend(deploymentData) {
   } catch (error) {
     let deploymentNotificationData = {
       status: "failed",
-      summary: `Deployment failed: ${error.message}`,
+      summary: `Deployment failed`,
       deployments: [],
     };
     await sendNotificationToBackend(deploymentNotificationData);
