@@ -2,10 +2,10 @@ const core = require("@actions/core");
 const github = require("@actions/github");
 const { default: axios } = require("axios");
 const { spawn } = require("child_process");
-const { randomBytes } = require("crypto");
 const fs = require("fs").promises;
 const path = require("path");
 const { getLatestBlockNumber } = require("./network");
+const { createNode, checkNodeLiveness } = require("./node");
 
 // // Default mnemonic to be used as environment variable
 // const DEFAULT_MNEMONIC =
@@ -74,6 +74,7 @@ async function processBroadcastDirectory(chainId, workingDir) {
 
     // Process event ABIs from build directory
     const eventAbi = [];
+    const contracts = [];
     if (
       await fs
         .access(buildDir)
@@ -84,6 +85,7 @@ async function processBroadcastDirectory(chainId, workingDir) {
         if (entry.isFile && entry.name.endsWith(".json")) {
           const content = await fs.readFile(entry.path, "utf8");
           const buildJson = JSON.parse(content);
+          contracts.push(buildJson);
           if (Array.isArray(buildJson.abi)) {
             eventAbi.push(...buildJson.abi.filter((x) => x.type === "event"));
           }
@@ -95,6 +97,7 @@ async function processBroadcastDirectory(chainId, workingDir) {
     const deployments = {
       transactions: [],
       receipts: [],
+      contracts: [],
       libraries: [],
     };
 
@@ -118,6 +121,24 @@ async function processBroadcastDirectory(chainId, workingDir) {
         }
         if (runLatestJson.libraries) {
           deployments.libraries.push(...runLatestJson.libraries);
+        }
+      }
+    }
+
+    for (const transaction of deployments.transactions) {
+      if (transaction.transactionType == "CREATE") {
+        const bytecode = transaction.transaction.input;
+        const contract = contracts.find(
+          (contract) => contract.bytecode.object === bytecode,
+        );
+
+        if (contract) {
+          deployments.contracts.push({
+            deployedBytecode: contract.deployedBytecode.object,
+            immutableReferences: contract.deployedBytecode.immutableReferences,
+            abi: JSON.stringify(contract.abi),
+            deployedBytecodeSourceMap: contract.deployedBytecode.sourceMap,
+          });
         }
       }
     }
@@ -162,88 +183,6 @@ async function processBroadcastDirectory(chainId, workingDir) {
     console.error("Error processing broadcast directory:", error);
     throw error;
   }
-}
-
-/**
- * Creates a sandbox node and returns the BuildBear RPC URL.
- *
- * @param {string} repoName - The repository name
- * @param {string} commitHash - The commit hash
- * @param {number} chainId - The chain ID for the fork
- * @param {number} blockNumber - The block number for the fork
- * @returns {string} - The BuildBear RPC URL for the sandbox node
- */
-async function createNode(repoName, commitHash, chainId, blockNumber) {
-  try {
-    const sandboxId = `${repoName}-${commitHash.slice(0, 8)}-${randomBytes(4).toString("hex")}`;
-    const url = "https://api.buildbear.io/v1/buildbear-sandbox";
-    const bearerToken = core.getInput("buildbear-token", { required: true });
-
-    const data = {
-      chainId: Number(chainId),
-      nodeName: sandboxId.toString(),
-      blockNumber: blockNumber ? Number(blockNumber) : undefined,
-    };
-
-    const response = await axios.post(url, data, {
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    core.exportVariable("BUILDBEAR_RPC_URL", response.data.rpcUrl);
-    core.exportVariable("MNEMONIC", response.data.mnemonic);
-    return {
-      url: response.data.rpcUrl,
-      sandboxId,
-    };
-  } catch (error) {
-    console.error(
-      "Error creating node:",
-      error.response?.data || error.message,
-    );
-    throw error;
-  }
-}
-/**
- * Checks if the node is ready by continuously polling for status.
- *
- * @param {string} url - The BuildBear RPC URL
- * @param {number} maxRetries - Maximum number of retries before giving up
- * @param {number} delay - Delay between retries in milliseconds
- * @returns {boolean} - Returns true if the node becomes live, otherwise false
- */
-async function checkNodeLiveness(url, maxRetries = 10, delay = 5000) {
-  let attempts = 0;
-  while (attempts < maxRetries) {
-    try {
-      const resp = await axios.post(url, {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_chainId",
-        params: [],
-      });
-
-      // Check if status is 200 and if result is absent
-      if (resp.status === 200 && resp.data.result) {
-        console.log(`Sandbox is live: ${url}`);
-        return true;
-      }
-    } catch (error) {
-      console.log(error);
-      console.error(
-        `Attempt ${attempts + 1}: Sandbox is not live yet. Retrying...`,
-      );
-    }
-
-    // Wait for the specified delay before the next attempt
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    attempts++;
-  }
-
-  console.error(`Node did not become live after ${maxRetries} attempts.`);
-  return false;
 }
 
 /**
