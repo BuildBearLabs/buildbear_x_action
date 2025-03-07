@@ -8,13 +8,8 @@ const path = require("path");
 const { getLatestBlockNumber } = require("./network");
 const { compressBboutIfExists } = require("./util/test-resimulation/runCompression");
 const { sendCompressedDataToBackend } = require("./util/test-resimulation/sendCompressedData");
-
-// // Default mnemonic to be used as environment variable
-// const DEFAULT_MNEMONIC =
-//   "test test test test test test test test test test test junk";
-
-// // Export mnemonic as environment variable
-// core.exportVariable("MNEMONIC", DEFAULT_MNEMONIC);
+const { main: processContractArtifacts } = require("./util/auto-verification/contractArtifactProcessor");
+const { sendContractArtifactsToBackend } = require("./util/auto-verification/sendContractArtifacts");
 
 /**
  * Recursively walk through directories
@@ -178,7 +173,9 @@ async function processBroadcastDirectory(chainId, workingDir) {
 async function createNode(repoName, commitHash, chainId, blockNumber) {
   try {
     const sandboxId = `${repoName}-${commitHash.slice(0, 8)}-${randomBytes(4).toString("hex")}`;
-    const url = "https://api.buildbear.io/v1/buildbear-sandbox";
+    // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
+    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io';
+    const url = `${baseUrl}/v1/buildbear-sandbox`;
     const bearerToken = core.getInput("buildbear-token", { required: true });
 
     const data = {
@@ -208,6 +205,7 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
     throw error;
   }
 }
+
 /**
  * Checks if the node is ready by continuously polling for status.
  *
@@ -258,36 +256,77 @@ async function checkNodeLiveness(url, maxRetries = 10, delay = 5000) {
  */
 async function processTestResimulationArtifacts(workingDir, options = {}) {
   try {
-    console.log(`Processing test resimulation artifacts from ${workingDir}...`);
+    console.log("Processing test resimulation artifacts...");
     
-    // Check if bbout directory exists and compress it
+    // Compress bbout directory if it exists
     const { compressedFilePath, metadata } = await compressBboutIfExists(workingDir, {
       status: options.status || "success",
-      message: options.message || "Operation completed successfully",
-      directoryName: 'bbout' // Explicitly specify the directory name for backward compatibility
+      message: options.message || "Test artifacts processed",
+      directoryName: "bbout"
     });
     
+    // If no compressed file was created, return early
     if (!compressedFilePath) {
-      console.log('No bbout directory found or compression failed, skipping test resimulation');
+      console.log("No bbout directory found or compression failed. Skipping artifact upload.");
       return { compressedFilePath: null, metadata: null, response: null };
     }
     
-    console.log(`bbout directory compressed to ${compressedFilePath}`);
-    
     // Send the compressed file to the backend
-    try {
-      const response = await sendCompressedDataToBackend(compressedFilePath, metadata);
-      console.log(`Successfully sent test artifacts to backend: ${JSON.stringify(response)}`);
-      return { compressedFilePath, metadata, response };
-    } catch (sendError) {
-      console.error(`Error sending compressed data to backend: ${sendError.message}`);
-      // Don't fail the operation if sending fails
-      return { compressedFilePath, metadata, response: null };
-    }
+    const response = await sendCompressedDataToBackend(compressedFilePath, metadata);
+    
+    return { compressedFilePath, metadata, response };
   } catch (error) {
-    console.error(`Error processing test resimulation artifacts: ${error.message}`);
-    // Don't fail the operation if processing fails
+    console.error(`Error processing test artifacts: ${error.message}`);
     return { compressedFilePath: null, metadata: null, response: null };
+  }
+}
+
+/**
+ * Processes contract artifacts for auto verification and sends them to the backend
+ * @param {string} workingDir - Working directory where contracts are located
+ * @param {Object} options - Options for processing
+ * @param {string} options.status - Status of the operation ("success" or "failed")
+ * @param {string} options.message - Message describing the operation result
+ * @returns {Promise<{artifacts: Object|null, response: Object|null}>}
+ */
+async function processContractVerificationArtifacts(workingDir, options = {}) {
+  try {
+    console.log("Processing contract verification artifacts...");
+    
+    // Set the directory paths for contract artifacts
+    const broadcastDir = path.join(workingDir, "broadcast");
+    const outDir = path.join(workingDir, "out");
+    
+    // Check if directories exist
+    try {
+      await fs.access(broadcastDir);
+      await fs.access(outDir);
+    } catch (error) {
+      console.log(`Required directories not found: ${error.message}. Skipping contract verification.`);
+      return { artifacts: null, response: null };
+    }
+    
+    // Process contract artifacts
+    console.log("Collecting contract artifacts for verification...");
+    const contractArtifacts = await processContractArtifacts(broadcastDir, outDir);
+    
+    // If no artifacts were found, return early
+    if (!contractArtifacts || Object.keys(contractArtifacts).length === 0) {
+      console.log("No contract artifacts found. Skipping artifact upload.");
+      return { artifacts: null, response: null };
+    }
+    
+    // Send the artifacts to the backend
+    console.log("Sending contract artifacts to backend...");
+    const response = await sendContractArtifactsToBackend(contractArtifacts, {
+      status: options.status || "success",
+      message: options.message || "Contract artifacts processed for verification"
+    });
+    
+    return { artifacts: contractArtifacts, response };
+  } catch (error) {
+    console.error(`Error processing contract verification artifacts: ${error.message}`);
+    return { artifacts: null, response: null };
   }
 }
 
@@ -329,6 +368,12 @@ async function executeDeploy(deployCmd, workingDir) {
     status: exitCode === 0 ? "success" : "failed",
     message: exitCode === 0 ? "Deployment completed successfully" : `Deployment failed with exit code ${exitCode}`
   });
+  
+  // Process the auto verification artifacts
+  await processContractVerificationArtifacts(workingDir, {
+    status: exitCode === 0 ? "success" : "failed",
+    message: exitCode === 0 ? "Deployment completed successfully" : `Deployment failed with exit code ${exitCode}`
+  });
 }
 
 /**
@@ -362,8 +407,9 @@ const extractContractData = (data) => {
 async function sendNotificationToBackend(deploymentData) {
   try {
     const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`;
-    const notificationEndpoint =
-      "https://api.buildbear.io/ci/deployment-notification";
+    // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
+    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io';
+    const notificationEndpoint = `${baseUrl}/ci/deployment-notification`;
 
     let status = deploymentData.status;
     let summary = deploymentData.summary ?? "";
