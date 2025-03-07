@@ -89,7 +89,7 @@ jobs:
       - name: Show Forge version
         run: forge --version
 
-      - name: Run Forge Tests
+      - name: Run Forge Tests (Optional)
         run: forge test -vvv
 
       - name: Run BB Action CI
@@ -124,3 +124,4 @@ jobs:
 
 - Ensure the `deploy-command` matches the command in your project for deploying contracts.
 - This action requires Node.js 20 (`node20`) to run the main deployment script.
+- Running forge tests is optional and can be skipped if you don't need to run tests as part of your workflow.

@@ -6,6 +6,8 @@ const { randomBytes } = require("crypto");
 const fs = require("fs").promises;
 const path = require("path");
 const { getLatestBlockNumber } = require("./network");
+const { compressBboutIfExists } = require("./util/test-resimulation/runCompression");
+const { sendCompressedDataToBackend } = require("./util/test-resimulation/sendCompressedData");
 
 // // Default mnemonic to be used as environment variable
 // const DEFAULT_MNEMONIC =
@@ -247,27 +249,86 @@ async function checkNodeLiveness(url, maxRetries = 10, delay = 5000) {
 }
 
 /**
+ * Processes test artifacts by compressing the bbout directory and sending it to the backend
+ * @param {string} workingDir - Working directory where bbout is located
+ * @param {Object} options - Options for processing
+ * @param {string} options.status - Status of the operation ("success" or "failed")
+ * @param {string} options.message - Message describing the operation result
+ * @returns {Promise<{compressedFilePath: string|null, metadata: Object|null, response: Object|null}>}
+ */
+async function processTestResimulationArtifacts(workingDir, options = {}) {
+  try {
+    console.log(`Processing test resimulation artifacts from ${workingDir}...`);
+    
+    // Check if bbout directory exists and compress it
+    const { compressedFilePath, metadata } = await compressBboutIfExists(workingDir, {
+      status: options.status || "success",
+      message: options.message || "Operation completed successfully",
+      directoryName: 'bbout' // Explicitly specify the directory name for backward compatibility
+    });
+    
+    if (!compressedFilePath) {
+      console.log('No bbout directory found or compression failed, skipping test resimulation');
+      return { compressedFilePath: null, metadata: null, response: null };
+    }
+    
+    console.log(`bbout directory compressed to ${compressedFilePath}`);
+    
+    // Send the compressed file to the backend
+    try {
+      const response = await sendCompressedDataToBackend(compressedFilePath, metadata);
+      console.log(`Successfully sent test artifacts to backend: ${JSON.stringify(response)}`);
+      return { compressedFilePath, metadata, response };
+    } catch (sendError) {
+      console.error(`Error sending compressed data to backend: ${sendError.message}`);
+      // Don't fail the operation if sending fails
+      return { compressedFilePath, metadata, response: null };
+    }
+  } catch (error) {
+    console.error(`Error processing test resimulation artifacts: ${error.message}`);
+    // Don't fail the operation if processing fails
+    return { compressedFilePath: null, metadata: null, response: null };
+  }
+}
+
+/**
  * Executes the deployment command.
- *
+ * 
  * @param {string} deployCmd - The command to deploy the contracts
  */
 async function executeDeploy(deployCmd, workingDir) {
-  const promise = new Promise((resolve, _) => {
-    const child = spawn(deployCmd, { shell: true, cwd: workingDir });
-    child.stdout.pipe(process.stdout);
-    child.stderr.pipe(process.stderr);
-    child.on("exit", (code, _) => {
-      if (code == 1) {
-        console.error(`Executing the deploy command failed`);
-        core.setFailed(`Executing the deploy command failed`);
+  console.log(`Executing deploy command: ${deployCmd}`);
+  console.log(`Working directory: ${workingDir}`);
+
+  const promise = new Promise((resolve, reject) => {
+    const child = spawn(deployCmd, {
+      shell: true,
+      cwd: workingDir,
+      stdio: "inherit",
+    });
+
+    child.on("error", (error) => {
+      console.error(`Error executing deploy command: ${error.message}`);
+      reject(error);
+    });
+
+    child.on("close", (code) => {
+      if (code !== 0) {
+        console.error(`Deployment failed with exit code ${code}`);
       } else {
         console.log("Deployment completed successfully");
       }
-      resolve();
+      resolve(code);
     });
   });
 
-  await promise;
+  const exitCode = await promise;
+  
+  // Process test resimulation artifacts after deployment
+  await processTestResimulationArtifacts(workingDir, {
+    status: exitCode === 0 ? "success" : "failed",
+    message: exitCode === 0 ? "Deployment completed successfully" : `Deployment failed with exit code ${exitCode}`
+  });
 }
 
 /**
