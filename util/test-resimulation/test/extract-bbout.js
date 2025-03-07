@@ -9,7 +9,7 @@
 
 const fs = require("fs").promises;
 const path = require("path");
-const { decompressArchive } = require("../compress");
+const { decompressArchive } = require("../../compress");
 
 /**
  * Main function to extract a compressed archive
@@ -21,7 +21,7 @@ async function main() {
 
     if (args.length === 0) {
       console.error(
-        "Usage: node util/extract-bbout.js <compressed-file-path> [output-directory]"
+        "Usage: node util/test-resimulation/test/extract-bbout.js <compressed-file-path> [output-directory]"
       );
       process.exit(1);
     }
