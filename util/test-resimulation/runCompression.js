@@ -133,9 +133,9 @@ async function runForgeTestAndCompress(workingDir, forgeArgs = [], directoryName
  * @param {string} options.directoryName - Directory name to compress (default: 'bbout')
  * @returns {Promise<{compressedFilePath: string|null, metadata: Object|null}>} - Path to compressed file and metadata or null if directory doesn't exist
  */
-async function compressBboutIfExists(workingDir, options = { status: "success", directoryName: 'bbout' }) {
+async function compressBboutIfExists(workingDir, options = { status: "success", directoryName: 'bbOut' }) {
   try {
-    const directoryName = options.directoryName || 'bbout';
+    const directoryName = options.directoryName || 'bbOut';
     const targetDir = path.join(workingDir, directoryName);
     
     // Check if target directory exists
