@@ -2,7 +2,7 @@
 
 /**
  * Utility for extracting compressed directory archives
- * 
+ *
  * This script extracts files from a compressed archive created by the
  * compressDirectory function.
  */
@@ -21,7 +21,7 @@ async function main() {
 
     if (args.length === 0) {
       console.error(
-        "Usage: node util/test-resimulation/test/extract-bbout.js <compressed-file-path> [output-directory]"
+        "Usage: node util/test-resimulation/test/extract-bbout.js <compressed-file-path> [output-directory]",
       );
       process.exit(1);
     }

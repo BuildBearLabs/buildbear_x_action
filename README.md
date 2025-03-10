@@ -5,11 +5,13 @@ This GitHub Action allows you to automate smart contract deployments across mult
 ## ⚠️ Important: BuildBear Foundry Fork
 
 This action requires using BuildBear's fork of Foundry, which includes essential updates for:
+
 - Generating enhanced artifacts for test simulation
 - Enabling automatic contract verification
 - Improved integration with BuildBear's infrastructure
 
 Install our Foundry fork instead of the standard version:
+
 ```bash
 curl -L https://github.com/BuildBearLabs/foundry/releases/latest/download/foundry_nightly_linux_amd64.tar.gz | tar xzf - -C ~/.foundry/bin/
 ```
@@ -25,12 +27,12 @@ curl -L https://github.com/BuildBearLabs/foundry/releases/latest/download/foundr
 
 ## 🛠️ Inputs
 
-| Name               | Description                                                                                              | Required |
-| ------------------ | -------------------------------------------------------------------------------------------------------- | -------- |
-| `network`          | List of networks to deploy on, with `chainId` and optional `blockNumber`. Example format provided below. | `true`   |
-| `deploy-command`   | Command to deploy the contract, such as `make deploy`.                                                   | `true`   |
-| `buildbear-token`  | Your BuildBear API token for authentication.                                                             | `true`   |
-| `working-directory`| Path to the directory containing the project. Default is the root directory.                             | `false`  |
+| Name                | Description                                                                                              | Required |
+| ------------------- | -------------------------------------------------------------------------------------------------------- | -------- |
+| `network`           | List of networks to deploy on, with `chainId` and optional `blockNumber`. Example format provided below. | `true`   |
+| `deploy-command`    | Command to deploy the contract, such as `make deploy`.                                                   | `true`   |
+| `buildbear-token`   | Your BuildBear API token for authentication.                                                             | `true`   |
+| `working-directory` | Path to the directory containing the project. Default is the root directory.                             | `false`  |
 
 ### Example `network` Input Format
 
@@ -48,18 +50,18 @@ The `network` input is expected as a JSON array containing network details, each
 ]
 ```
 
-## 🌐 Runtime Environment Variables  
+## 🌐 Runtime Environment Variables
 
 During the execution of this action, the following environment variables are available:
 
-- **`BUILDBEAR_RPC_URL`**: The RPC URL provided by BuildBear, enabling connections to the sandbox.  
-- **`MNEMONIC`**: A 12- or 24-word mnemonic phrase used for signing transactions during deployment.  
+- **`BUILDBEAR_RPC_URL`**: The RPC URL provided by BuildBear, enabling connections to the sandbox.
+- **`MNEMONIC`**: A 12- or 24-word mnemonic phrase used for signing transactions during deployment.
 
 ## 📤 Outputs
 
-| Name          | Description              |
-| ------------- | ------------------------ |
-| `deployments` | Logs from deployments.   |
+| Name          | Description            |
+| ------------- | ---------------------- |
+| `deployments` | Logs from deployments. |
 
 ## 🚀 Usage Example
 
@@ -109,7 +111,8 @@ jobs:
           buildbear-token: "${{ secrets.BUILDBEAR_TOKEN }}"
 ```
 
-> **Note:** 
+> **Note:**
+>
 > 1. Make sure to use BuildBear's Foundry fork instead of the standard Foundry installation
 > 2. Ensure that the `buildbear-token` is securely stored as a secret in your GitHub repository under `BUILDBEAR_TOKEN`
 

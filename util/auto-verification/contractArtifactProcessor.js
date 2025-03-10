@@ -1,5 +1,6 @@
 const fs = require("fs").promises; // Use fs.promises for async operations
 const path = require("path");
+const { findDirectory } = require("../pathOperations");
 
 // Function to read JSON files
 async function readJSON(filePath) {
@@ -62,7 +63,7 @@ async function processSources(sources) {
           if (filePath.startsWith("lib/")) {
             const nodeModulesPath = path.resolve(
               "node_modules",
-              filePath.substring(4)
+              filePath.substring(4),
             );
             const content = await fs.readFile(nodeModulesPath, "utf8");
             transformedSources[filePath] = { content };
@@ -98,7 +99,7 @@ async function processDirectory(
   broadcastDir,
   dirName,
   outDir,
-  allContracts = {}
+  allContracts = {},
 ) {
   try {
     const dirPath = path.join(broadcastDir, dirName);
@@ -135,7 +136,7 @@ async function processDirectory(
               artifactContent.metadata.settings.remappings
             ) {
               remappings = await processRemappings(
-                artifactContent.metadata.settings.remappings
+                artifactContent.metadata.settings.remappings,
               );
             }
 
@@ -178,7 +179,7 @@ async function processDirectory(
             });
           } else {
             console.log(
-              `Failed to read artifact for contract ${contractName} or metadata is missing.`
+              `Failed to read artifact for contract ${contractName} or metadata is missing.`,
             );
           }
         } else {
@@ -214,7 +215,7 @@ async function processAllDirectories(broadcastDir, outDir) {
           deployMarketDir,
           dir,
           outDir,
-          allContracts
+          allContracts,
         );
       }
     }
@@ -222,7 +223,7 @@ async function processAllDirectories(broadcastDir, outDir) {
     // Optionally write to a file
     await fs.writeFile(
       "processed-contracts.json",
-      JSON.stringify(allContracts, null, 2)
+      JSON.stringify(allContracts, null, 2),
     );
 
     console.log("Results written to processed-contracts.json");

@@ -6,10 +6,19 @@ const { randomBytes } = require("crypto");
 const fs = require("fs").promises;
 const path = require("path");
 const { getLatestBlockNumber } = require("./network");
-const { compressBboutIfExists } = require("./util/test-resimulation/runCompression");
-const { sendCompressedDataToBackend } = require("./util/test-resimulation/sendCompressedData");
-const { main: processContractArtifacts } = require("./util/auto-verification/contractArtifactProcessor");
-const { sendContractArtifactsToBackend } = require("./util/auto-verification/sendContractArtifacts");
+const {
+  compressBboutIfExists,
+} = require("./util/test-resimulation/runCompression");
+const {
+  sendCompressedDataToBackend,
+} = require("./util/test-resimulation/sendCompressedData");
+const {
+  main: processContractArtifacts,
+} = require("./util/auto-verification/contractArtifactProcessor");
+const {
+  sendContractArtifactsToBackend,
+} = require("./util/auto-verification/sendContractArtifacts");
+const { findDirectory } = require("./util/pathOperations");
 
 /**
  * Recursively walk through directories
@@ -33,29 +42,11 @@ async function* walk(dir) {
   }
 }
 
-/**
- * Find a directory in project root
- * @param {string} targetDir Directory name to find
- * @returns {Promise<string|null>}
- */
-async function findDirectory(targetDir, workingDir) {
-  try {
-    const entries = await fs.readdir(workingDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() && entry.name === targetDir) {
-        return path.join(workingDir, entry.name);
-      }
-    }
-    return null;
-  } catch (error) {
-    console.error(`Error finding directory ${targetDir}:`, error);
-    return null;
-  }
-}
 
 /**
  * Processes broadcast directory to collect deployment information
  * @param {string} chainId Chain identifier
+ * @param workingDir
  * @returns {Promise<Object>} Deployment information
  */
 async function processBroadcastDirectory(chainId, workingDir) {
@@ -174,7 +165,8 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
   try {
     const sandboxId = `${repoName}-${commitHash.slice(0, 8)}-${randomBytes(4).toString("hex")}`;
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io';
+    const baseUrl =
+      process.env.BUILDBEAR_BASE_URL || "https://api.buildbear.io";
     const url = `${baseUrl}/v1/buildbear-sandbox`;
     const bearerToken = core.getInput("buildbear-token", { required: true });
 
@@ -257,23 +249,31 @@ async function checkNodeLiveness(url, maxRetries = 10, delay = 5000) {
 async function processTestResimulationArtifacts(workingDir, options = {}) {
   try {
     console.log("Processing test resimulation artifacts...");
-    
+
     // Compress bbout directory if it exists
-    const { compressedFilePath, metadata } = await compressBboutIfExists(workingDir, {
-      status: options.status || "success",
-      message: options.message || "Test artifacts processed",
-      directoryName: "bbout"
-    });
-    
+    const { compressedFilePath, metadata } = await compressBboutIfExists(
+      workingDir,
+      {
+        status: options.status || "success",
+        message: options.message || "Test artifacts processed",
+        directoryName: "bbOut",
+      },
+    );
+
     // If no compressed file was created, return early
     if (!compressedFilePath) {
-      console.log("No bbout directory found or compression failed. Skipping artifact upload.");
+      console.log(
+        "No bbout directory found or compression failed. Skipping artifact upload.",
+      );
       return { compressedFilePath: null, metadata: null, response: null };
     }
-    
+
     // Send the compressed file to the backend
-    const response = await sendCompressedDataToBackend(compressedFilePath, metadata);
-    
+    const response = await sendCompressedDataToBackend(
+      compressedFilePath,
+      metadata,
+    );
+
     return { compressedFilePath, metadata, response };
   } catch (error) {
     console.error(`Error processing test artifacts: ${error.message}`);
@@ -292,48 +292,57 @@ async function processTestResimulationArtifacts(workingDir, options = {}) {
 async function processContractVerificationArtifacts(workingDir, options = {}) {
   try {
     console.log("Processing contract verification artifacts...");
-    
+
     // Set the directory paths for contract artifacts
-    const broadcastDir = path.join(workingDir, "broadcast");
-    const outDir = path.join(workingDir, "out");
-    
+    const broadcastDir = await findDirectory("broadcast", workingDir);
+    const outDir = await findDirectory("out", workingDir);
+
     // Check if directories exist
     try {
       await fs.access(broadcastDir);
       await fs.access(outDir);
     } catch (error) {
-      console.log(`Required directories not found: ${error.message}. Skipping contract verification.`);
+      console.log(
+        `Required directories not found: ${error.message}. Skipping contract verification.`,
+      );
       return { artifacts: null, response: null };
     }
-    
+
     // Process contract artifacts
     console.log("Collecting contract artifacts for verification...");
-    const contractArtifacts = await processContractArtifacts(broadcastDir, outDir);
-    
+    const contractArtifacts = await processContractArtifacts(
+      broadcastDir,
+      outDir,
+    );
+
     // If no artifacts were found, return early
     if (!contractArtifacts || Object.keys(contractArtifacts).length === 0) {
       console.log("No contract artifacts found. Skipping artifact upload.");
       return { artifacts: null, response: null };
     }
-    
+
     // Send the artifacts to the backend
     console.log("Sending contract artifacts to backend...");
     const response = await sendContractArtifactsToBackend(contractArtifacts, {
       status: options.status || "success",
-      message: options.message || "Contract artifacts processed for verification"
+      message:
+        options.message || "Contract artifacts processed for verification",
     });
-    
+
     return { artifacts: contractArtifacts, response };
   } catch (error) {
-    console.error(`Error processing contract verification artifacts: ${error.message}`);
+    console.error(
+      `Error processing contract verification artifacts: ${error.message}`,
+    );
     return { artifacts: null, response: null };
   }
 }
 
 /**
  * Executes the deployment command.
- * 
+ *
  * @param {string} deployCmd - The command to deploy the contracts
+ * @param workingDir
  */
 async function executeDeploy(deployCmd, workingDir) {
   console.log(`Executing deploy command: ${deployCmd}`);
@@ -362,17 +371,23 @@ async function executeDeploy(deployCmd, workingDir) {
   });
 
   const exitCode = await promise;
-  
+
   // Process test resimulation artifacts after deployment
   await processTestResimulationArtifacts(workingDir, {
     status: exitCode === 0 ? "success" : "failed",
-    message: exitCode === 0 ? "Deployment completed successfully" : `Deployment failed with exit code ${exitCode}`
+    message:
+      exitCode === 0
+        ? "Deployment completed successfully"
+        : `Deployment failed with exit code ${exitCode}`,
   });
-  
+
   // Process the auto verification artifacts
   await processContractVerificationArtifacts(workingDir, {
     status: exitCode === 0 ? "success" : "failed",
-    message: exitCode === 0 ? "Deployment completed successfully" : `Deployment failed with exit code ${exitCode}`
+    message:
+      exitCode === 0
+        ? "Deployment completed successfully"
+        : `Deployment failed with exit code ${exitCode}`,
   });
 }
 
@@ -408,7 +423,8 @@ async function sendNotificationToBackend(deploymentData) {
   try {
     const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`;
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io';
+    const baseUrl =
+      process.env.BUILDBEAR_BASE_URL || "https://api.buildbear.io";
     const notificationEndpoint = `${baseUrl}/ci/deployment-notification`;
 
     let status = deploymentData.status;
