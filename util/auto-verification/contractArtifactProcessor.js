@@ -198,40 +198,42 @@ async function processDirectory(
 // Main function to process the broadcast and out directories
 async function processAllDirectories(broadcastDir, outDir) {
   try {
-    // Get all directories in the DeployMarket.s.sol folder
-    const deployMarketDir = path.join(broadcastDir, "DeployMarket.s.sol");
-    const dirs = await fs.readdir(deployMarketDir);
+    // Get all directories in the broadcast directory
+    const dirs = await fs.readdir(broadcastDir);
 
     let allContracts = {};
 
     // Process each directory
     for (const dir of dirs) {
-      const dirPath = path.join(deployMarketDir, dir);
+      const dirPath = path.join(broadcastDir, dir);
       const stat = await fs.stat(dirPath);
 
       if (stat.isDirectory()) {
         console.log(`Processing directory: ${dir}`);
-        allContracts = await processDirectory(
-          deployMarketDir,
-          dir,
-          outDir,
-          allContracts,
-        );
+
+        // Get all subdirectories within each top-level directory
+        const subDirs = await fs.readdir(dirPath);
+        for (const subDir of subDirs) {
+          const subDirPath = path.join(dirPath, subDir);
+          const subStat = await fs.stat(subDirPath);
+
+          if (subStat.isDirectory()) {
+            console.log(`Processing subdirectory: ${dir}/${subDir}`);
+            allContracts = await processDirectory(
+                dirPath,
+                subDir,
+                outDir,
+                allContracts,
+            );
+          }
+        }
       }
     }
 
-    // Optionally write to a file
-    await fs.writeFile(
-      "processed-contracts.json",
-      JSON.stringify(allContracts, null, 2),
-    );
-
-    console.log("Results written to processed-contracts.json");
-
     return allContracts;
   } catch (error) {
-    console.error("Error in processAllDirectories:", error);
-    return {};
+    console.error("Error processing directories:", error);
+    throw error;
   }
 }
 
@@ -250,28 +252,21 @@ function groupByContractName(data) {
   return grouped;
 }
 
-async function main() {
-  // Set the directory paths
-  const broadcastDir = path.join(__dirname, "broadcast");
-  const outDir = path.join(__dirname, "out");
+async function processContractArtifacts(broadcastDir, outDir) {
 
-  console.log("Processing all directories in DeployMarket.s.sol...");
+  console.log("Processing all directories");
   const data = await processAllDirectories(broadcastDir, outDir);
   const dataGrouped = groupByContractName(data);
   console.log(JSON.stringify(dataGrouped, null, 2));
   return dataGrouped;
 }
 
-// Only run main when directly executed, not when imported
-if (require.main === module) {
-  main().catch(console.error);
-}
 
 // Export the functions for use in other modules
 module.exports = {
   processAllDirectories,
   groupByContractName,
-  main,
+  processContractArtifacts,
   readJSON,
   findArtifactPath,
   processSources,

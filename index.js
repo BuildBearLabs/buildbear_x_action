@@ -13,7 +13,7 @@ const {
   sendCompressedDataToBackend,
 } = require("./util/test-resimulation/sendCompressedData");
 const {
-  main: processContractArtifacts,
+  processContractArtifacts,
 } = require("./util/auto-verification/contractArtifactProcessor");
 const {
   sendContractArtifactsToBackend,
