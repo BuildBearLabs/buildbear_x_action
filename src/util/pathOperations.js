@@ -1,5 +1,5 @@
-const fs = require("fs").promises;
-const path = require("path");
+const fs = require('fs').promises
+const path = require('path')
 
 /**
  * Find a directory in project root
@@ -9,21 +9,19 @@ const path = require("path");
  */
 async function findDirectory(targetDir, workingDir) {
   try {
-    const entries = await fs.readdir(workingDir, { withFileTypes: true });
+    const entries = await fs.readdir(workingDir, { withFileTypes: true })
     for (const entry of entries) {
       if (entry.isDirectory() && entry.name === targetDir) {
-        return path.join(workingDir, entry.name);
+        return path.join(workingDir, entry.name)
       }
     }
-    return null;
+    return null
   } catch (error) {
-    console.error(`Error finding directory ${targetDir}:`, error);
-    return null;
+    console.error(`Error finding directory ${targetDir}:`, error)
+    return null
   }
 }
 
-
 module.exports = {
-  findDirectory
-};
-
+  findDirectory,
+}
