@@ -33813,10 +33813,10 @@ module.exports = {
  * for auto verification.
  */
 
-const fs = (__nccwpck_require__(9896).promises);
-const axios = __nccwpck_require__(7269);
-const path = __nccwpck_require__(6928);
-const github = __nccwpck_require__(3228);
+const fs = (__nccwpck_require__(9896).promises)
+const axios = __nccwpck_require__(7269)
+const path = __nccwpck_require__(6928)
+const github = __nccwpck_require__(3228)
 
 /**
  * Sends the contract artifacts to the backend
@@ -33826,18 +33826,18 @@ const github = __nccwpck_require__(3228);
  */
 async function sendContractArtifactsToBackend(
   contractArtifacts,
-  metadata = {},
+  metadata = {}
 ) {
   try {
-    console.log("Sending contract artifacts to backend");
+    console.log('Sending contract artifacts to backend')
 
     // Get GitHub context information
-    const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`;
+    const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
 
     // Prepare the webhook payload according to the WebhookRequest interface
     const webhookPayload = {
-      status: metadata.status || "success", // Use "success" or "failed"
-      task: "auto_verification",
+      status: metadata.status || 'success', // Use "success" or "failed"
+      task: 'auto_verification',
       timestamp: new Date().toISOString(),
       payload: {
         repositoryName: github.context.repo.repo,
@@ -33850,37 +33850,39 @@ async function sendContractArtifactsToBackend(
           `Contract artifacts uploaded at ${new Date().toISOString()}`,
         artifacts: contractArtifacts,
       },
-    };
+    }
 
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl =
-      process.env.BUILDBEAR_BASE_URL || "https://api.buildbear.io";
+    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
 
     // Send to backend
-    const response = await axios.post(`${baseUrl}/ci/webhook`, webhookPayload, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.BUILDBEAR_TOKEN || ""}`,
-      },
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-    });
+    const response = await axios.post(
+      `${baseUrl}/ci/webhook/${API_KEY}`,
+      webhookPayload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      }
+    )
 
     console.log(
-      `Successfully sent contract artifacts to backend. Status: ${response.status}`,
-    );
-    return response.data;
+      `Successfully sent contract artifacts to backend. Status: ${response.status}`
+    )
+    return response.data
   } catch (error) {
     console.error(
-      `Error sending contract artifacts to backend: ${error.message}`,
-    );
-    throw error;
+      `Error sending contract artifacts to backend: ${error.message}`
+    )
+    throw error
   }
 }
 
 module.exports = {
   sendContractArtifactsToBackend,
-};
+}
 
 
 /***/ }),
@@ -34457,10 +34459,10 @@ module.exports = {
  * for test simulation.
  */
 
-const fs = (__nccwpck_require__(9896).promises);
-const axios = __nccwpck_require__(7269);
-const path = __nccwpck_require__(6928);
-const github = __nccwpck_require__(3228);
+const fs = (__nccwpck_require__(9896).promises)
+const axios = __nccwpck_require__(7269)
+const path = __nccwpck_require__(6928)
+const github = __nccwpck_require__(3228)
 
 /**
  * Sends the compressed bbout file to the backend
@@ -34471,22 +34473,22 @@ const github = __nccwpck_require__(3228);
 async function sendCompressedDataToBackend(compressedFilePath, metadata = {}) {
   try {
     console.log(
-      `Sending compressed bbout file to backend: ${compressedFilePath}`,
-    );
+      `Sending compressed bbout file to backend: ${compressedFilePath}`
+    )
 
     // Read the compressed file
-    const fileBuffer = await fs.readFile(compressedFilePath);
+    const fileBuffer = await fs.readFile(compressedFilePath)
 
     // Convert the file buffer to base64
-    const base64File = fileBuffer.toString("base64");
+    const base64File = fileBuffer.toString('base64')
 
     // Get GitHub context information
-    const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`;
+    const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
 
     // Prepare the webhook payload according to the WebhookRequest interface
     const webhookPayload = {
-      status: metadata.status || "success", // Use "success" or "failed"
-      task: "simulate_test",
+      status: metadata.status || 'success', // Use "success" or "failed"
+      task: 'simulate_test',
       timestamp: new Date().toISOString(),
       payload: {
         repositoryName: github.context.repo.repo,
@@ -34499,7 +34501,7 @@ async function sendCompressedDataToBackend(compressedFilePath, metadata = {}) {
           `Test artifacts uploaded at ${new Date().toISOString()}`,
         testsArtifacts: {
           filename: path.basename(compressedFilePath),
-          contentType: "application/gzip",
+          contentType: 'application/gzip',
           data: base64File,
           metadata: {
             originalSize: metadata.originalSize || 0,
@@ -34509,35 +34511,37 @@ async function sendCompressedDataToBackend(compressedFilePath, metadata = {}) {
           },
         },
       },
-    };
+    }
 
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl =
-      process.env.BUILDBEAR_BASE_URL || "https://api.buildbear.io";
+    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
 
     // Send to backend
-    const response = await axios.post(`${baseUrl}/ci/webhook`, webhookPayload, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.BUILDBEAR_TOKEN || ""}`,
-      },
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-    });
+    const response = await axios.post(
+      `${baseUrl}/ci/webhook/${API_KEY}`,
+      webhookPayload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      }
+    )
 
     console.log(
-      `Successfully sent test artifacts to backend. Status: ${response.status}`,
-    );
-    return response.data;
+      `Successfully sent test artifacts to backend. Status: ${response.status}`
+    )
+    return response.data
   } catch (error) {
-    console.error(`Error sending compressed data to backend: ${error.message}`);
-    throw error;
+    console.error(`Error sending compressed data to backend: ${error.message}`)
+    throw error
   }
 }
 
 module.exports = {
   sendCompressedDataToBackend,
-};
+}
 
 
 /***/ }),
@@ -41252,27 +41256,29 @@ module.exports = /*#__PURE__*/JSON.parse('{"application/1d-interleaved-parityfec
 /******/ 	
 /************************************************************************/
 var __webpack_exports__ = {};
-const core = __nccwpck_require__(7484);
-const github = __nccwpck_require__(3228);
-const { default: axios } = __nccwpck_require__(7269);
-const { spawn } = __nccwpck_require__(5317);
-const { randomBytes } = __nccwpck_require__(6982);
-const fs = (__nccwpck_require__(9896).promises);
-const path = __nccwpck_require__(6928);
-const { getLatestBlockNumber } = __nccwpck_require__(799);
+const core = __nccwpck_require__(7484)
+const github = __nccwpck_require__(3228)
+const { default: axios } = __nccwpck_require__(7269)
+const { spawn } = __nccwpck_require__(5317)
+const { randomBytes } = __nccwpck_require__(6982)
+const fs = (__nccwpck_require__(9896).promises)
+const path = __nccwpck_require__(6928)
+const { getLatestBlockNumber } = __nccwpck_require__(799)
 const {
   compressBboutIfExists,
-} = __nccwpck_require__(4203);
+} = __nccwpck_require__(4203)
 const {
   sendCompressedDataToBackend,
-} = __nccwpck_require__(5605);
+} = __nccwpck_require__(5605)
 const {
   processContractArtifacts,
-} = __nccwpck_require__(5772);
+} = __nccwpck_require__(5772)
 const {
   sendContractArtifactsToBackend,
-} = __nccwpck_require__(7051);
-const { findDirectory } = __nccwpck_require__(8157);
+} = __nccwpck_require__(7051)
+const { findDirectory } = __nccwpck_require__(8157)
+
+const src_API_KEY = core.getInput('buildbear-token', { required: true })
 
 /**
  * Recursively walk through directories
@@ -41280,22 +41286,21 @@ const { findDirectory } = __nccwpck_require__(8157);
  * @returns {AsyncGenerator<{path: string, name: string, isFile: boolean, isDirectory: boolean}>}
  */
 async function* walk(dir) {
-  const files = await fs.readdir(dir, { withFileTypes: true });
+  const files = await fs.readdir(dir, { withFileTypes: true })
   for (const dirent of files) {
-    const res = path.resolve(dir, dirent.name);
+    const res = path.resolve(dir, dirent.name)
     if (dirent.isDirectory()) {
-      yield* walk(res);
+      yield* walk(res)
     } else {
       yield {
         path: res,
         name: dirent.name,
         isFile: dirent.isFile(),
         isDirectory: false,
-      };
+      }
     }
   }
 }
-
 
 /**
  * Processes broadcast directory to collect deployment information
@@ -41306,16 +41311,16 @@ async function* walk(dir) {
 async function processBroadcastDirectory(chainId, workingDir) {
   try {
     // Find broadcast and build directories
-    const broadcastDir = await findDirectory("broadcast", workingDir);
+    const broadcastDir = await findDirectory('broadcast', workingDir)
     if (!broadcastDir) {
-      console.log("No broadcast directory found");
-      return null;
+      console.log('No broadcast directory found')
+      return null
     }
 
-    const buildDir = path.join(workingDir, "build");
+    const buildDir = path.join(workingDir, 'build')
 
     // Process event ABIs from build directory
-    const eventAbi = [];
+    const eventAbi = []
     if (
       await fs
         .access(buildDir)
@@ -41323,11 +41328,11 @@ async function processBroadcastDirectory(chainId, workingDir) {
         .catch(() => false)
     ) {
       for await (const entry of walk(buildDir)) {
-        if (entry.isFile && entry.name.endsWith(".json")) {
-          const content = await fs.readFile(entry.path, "utf8");
-          const buildJson = JSON.parse(content);
+        if (entry.isFile && entry.name.endsWith('.json')) {
+          const content = await fs.readFile(entry.path, 'utf8')
+          const buildJson = JSON.parse(content)
           if (Array.isArray(buildJson.abi)) {
-            eventAbi.push(...buildJson.abi.filter((x) => x.type === "event"));
+            eventAbi.push(...buildJson.abi.filter((x) => x.type === 'event'))
           }
         }
       }
@@ -41338,28 +41343,28 @@ async function processBroadcastDirectory(chainId, workingDir) {
       transactions: [],
       receipts: [],
       libraries: [],
-    };
+    }
 
     // Process broadcast files
     for await (const entry of walk(broadcastDir)) {
       if (
         entry.isFile &&
-        entry.name === "run-latest.json" &&
+        entry.name === 'run-latest.json' &&
         entry.path.includes(chainId.toString())
       ) {
-        console.log(`Processing broadcast file: ${entry.path}`);
+        console.log(`Processing broadcast file: ${entry.path}`)
 
-        const content = await fs.readFile(entry.path, "utf8");
-        const runLatestJson = JSON.parse(content);
+        const content = await fs.readFile(entry.path, 'utf8')
+        const runLatestJson = JSON.parse(content)
 
         if (runLatestJson.transactions) {
-          deployments.transactions.push(...runLatestJson.transactions);
+          deployments.transactions.push(...runLatestJson.transactions)
         }
         if (runLatestJson.receipts) {
-          deployments.receipts.push(...runLatestJson.receipts);
+          deployments.receipts.push(...runLatestJson.receipts)
         }
         if (runLatestJson.libraries) {
-          deployments.libraries.push(...runLatestJson.libraries);
+          deployments.libraries.push(...runLatestJson.libraries)
         }
       }
     }
@@ -41367,19 +41372,19 @@ async function processBroadcastDirectory(chainId, workingDir) {
     // Sort receipts by block number
     if (deployments.receipts.length > 0) {
       deployments.receipts.sort(
-        (a, b) => parseInt(a.blockNumber) - parseInt(b.blockNumber),
-      );
+        (a, b) => parseInt(a.blockNumber) - parseInt(b.blockNumber)
+      )
 
       // Sort transactions based on receipt order
       deployments.transactions.sort((a, b) => {
         const aIndex = deployments.receipts.findIndex(
-          (receipt) => receipt.transactionHash === a.hash,
-        );
+          (receipt) => receipt.transactionHash === a.hash
+        )
         const bIndex = deployments.receipts.findIndex(
-          (receipt) => receipt.transactionHash === b.hash,
-        );
-        return aIndex - bIndex;
-      });
+          (receipt) => receipt.transactionHash === b.hash
+        )
+        return aIndex - bIndex
+      })
 
       // Process logs
       deployments.receipts = deployments.receipts.map((receipt) => ({
@@ -41387,22 +41392,22 @@ async function processBroadcastDirectory(chainId, workingDir) {
         decodedLogs: receipt.logs.map((log) => {
           try {
             return {
-              eventName: "Event",
+              eventName: 'Event',
               data: log.data,
               topics: log.topics,
-            };
+            }
           } catch (e) {
-            console.log("Error decoding log:", e);
-            return null;
+            console.log('Error decoding log:', e)
+            return null
           }
         }),
-      }));
+      }))
     }
 
-    return deployments;
+    return deployments
   } catch (error) {
-    console.error("Error processing broadcast directory:", error);
-    throw error;
+    console.error('Error processing broadcast directory:', error)
+    throw error
   }
 }
 
@@ -41417,38 +41422,36 @@ async function processBroadcastDirectory(chainId, workingDir) {
  */
 async function createNode(repoName, commitHash, chainId, blockNumber) {
   try {
-    const sandboxId = `${repoName}-${commitHash.slice(0, 8)}-${randomBytes(4).toString("hex")}`;
-    // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl =
-      process.env.BUILDBEAR_BASE_URL || "https://api.buildbear.io";
-    const url = `${baseUrl}/v1/buildbear-sandbox`;
-    const bearerToken = core.getInput("buildbear-token", { required: true });
-
+    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
+    const url = `${baseUrl}/ci/webhook/${src_API_KEY}`
     const data = {
-      chainId: Number(chainId),
-      nodeName: sandboxId.toString(),
-      blockNumber: blockNumber ? Number(blockNumber) : undefined,
-    };
+      task: 'create_node',
+      payload: {
+        repositoryName: github.context.repo.repo,
+        repositoryOwner: github.context.repo.owner,
+        commitHash: github.context.sha,
+        fork: {
+          chainId: Number(chainId),
+          blockNumber: blockNumber ? Number(blockNumber) : undefined,
+        },
+      },
+    }
 
     const response = await axios.post(url, data, {
       headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
-    });
+    })
 
-    core.exportVariable("BUILDBEAR_RPC_URL", response.data.rpcUrl);
-    core.exportVariable("MNEMONIC", response.data.mnemonic);
+    core.exportVariable('BUILDBEAR_RPC_URL', response.data.rpcUrl)
+    core.exportVariable('MNEMONIC', response.data.mnemonic)
     return {
       url: response.data.rpcUrl,
       sandboxId,
-    };
+    }
   } catch (error) {
-    console.error(
-      "Error creating node:",
-      error.response?.data || error.message,
-    );
-    throw error;
+    console.error('Error creating node:', error.response?.data || error.message)
+    throw error
   }
 }
 
@@ -41461,35 +41464,35 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
  * @returns {boolean} - Returns true if the node becomes live, otherwise false
  */
 async function checkNodeLiveness(url, maxRetries = 10, delay = 5000) {
-  let attempts = 0;
+  let attempts = 0
   while (attempts < maxRetries) {
     try {
       const resp = await axios.post(url, {
-        jsonrpc: "2.0",
+        jsonrpc: '2.0',
         id: 1,
-        method: "eth_chainId",
+        method: 'eth_chainId',
         params: [],
-      });
+      })
 
       // Check if status is 200 and if result is absent
       if (resp.status === 200 && resp.data.result) {
-        console.log(`Sandbox is live: ${url}`);
-        return true;
+        console.log(`Sandbox is live: ${url}`)
+        return true
       }
     } catch (error) {
-      console.log(error);
+      console.log(error)
       console.error(
-        `Attempt ${attempts + 1}: Sandbox is not live yet. Retrying...`,
-      );
+        `Attempt ${attempts + 1}: Sandbox is not live yet. Retrying...`
+      )
     }
 
     // Wait for the specified delay before the next attempt
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    attempts++;
+    await new Promise((resolve) => setTimeout(resolve, delay))
+    attempts++
   }
 
-  console.error(`Node did not become live after ${maxRetries} attempts.`);
-  return false;
+  console.error(`Node did not become live after ${maxRetries} attempts.`)
+  return false
 }
 
 /**
@@ -41502,36 +41505,36 @@ async function checkNodeLiveness(url, maxRetries = 10, delay = 5000) {
  */
 async function processTestResimulationArtifacts(workingDir, options = {}) {
   try {
-    console.log("Processing test resimulation artifacts...");
+    console.log('Processing test resimulation artifacts...')
 
     // Compress bbout directory if it exists
     const { compressedFilePath, metadata } = await compressBboutIfExists(
       workingDir,
       {
-        status: options.status || "success",
-        message: options.message || "Test artifacts processed",
-        directoryName: "bbOut",
-      },
-    );
+        status: options.status || 'success',
+        message: options.message || 'Test artifacts processed',
+        directoryName: 'bbOut',
+      }
+    )
 
     // If no compressed file was created, return early
     if (!compressedFilePath) {
       console.log(
-        "No bbout directory found or compression failed. Skipping artifact upload.",
-      );
-      return { compressedFilePath: null, metadata: null, response: null };
+        'No bbout directory found or compression failed. Skipping artifact upload.'
+      )
+      return { compressedFilePath: null, metadata: null, response: null }
     }
 
     // Send the compressed file to the backend
     const response = await sendCompressedDataToBackend(
       compressedFilePath,
-      metadata,
-    );
+      metadata
+    )
 
-    return { compressedFilePath, metadata, response };
+    return { compressedFilePath, metadata, response }
   } catch (error) {
-    console.error(`Error processing test artifacts: ${error.message}`);
-    return { compressedFilePath: null, metadata: null, response: null };
+    console.error(`Error processing test artifacts: ${error.message}`)
+    return { compressedFilePath: null, metadata: null, response: null }
   }
 }
 
@@ -41545,50 +41548,50 @@ async function processTestResimulationArtifacts(workingDir, options = {}) {
  */
 async function processContractVerificationArtifacts(workingDir, options = {}) {
   try {
-    console.log("Processing contract verification artifacts...");
+    console.log('Processing contract verification artifacts...')
 
     // Set the directory paths for contract artifacts
-    const broadcastDir = await findDirectory("broadcast", workingDir);
-    const outDir = await findDirectory("out", workingDir);
+    const broadcastDir = await findDirectory('broadcast', workingDir)
+    const outDir = await findDirectory('out', workingDir)
 
     // Check if directories exist
     try {
-      await fs.access(broadcastDir);
-      await fs.access(outDir);
+      await fs.access(broadcastDir)
+      await fs.access(outDir)
     } catch (error) {
       console.log(
-        `Required directories not found: ${error.message}. Skipping contract verification.`,
-      );
-      return { artifacts: null, response: null };
+        `Required directories not found: ${error.message}. Skipping contract verification.`
+      )
+      return { artifacts: null, response: null }
     }
 
     // Process contract artifacts
-    console.log("Collecting contract artifacts for verification...");
+    console.log('Collecting contract artifacts for verification...')
     const contractArtifacts = await processContractArtifacts(
       broadcastDir,
-      outDir,
-    );
+      outDir
+    )
 
     // If no artifacts were found, return early
     if (!contractArtifacts || Object.keys(contractArtifacts).length === 0) {
-      console.log("No contract artifacts found. Skipping artifact upload.");
-      return { artifacts: null, response: null };
+      console.log('No contract artifacts found. Skipping artifact upload.')
+      return { artifacts: null, response: null }
     }
 
     // Send the artifacts to the backend
-    console.log("Sending contract artifacts to backend...");
+    console.log('Sending contract artifacts to backend...')
     const response = await sendContractArtifactsToBackend(contractArtifacts, {
-      status: options.status || "success",
+      status: options.status || 'success',
       message:
-        options.message || "Contract artifacts processed for verification",
-    });
+        options.message || 'Contract artifacts processed for verification',
+    })
 
-    return { artifacts: contractArtifacts, response };
+    return { artifacts: contractArtifacts, response }
   } catch (error) {
     console.error(
-      `Error processing contract verification artifacts: ${error.message}`,
-    );
-    return { artifacts: null, response: null };
+      `Error processing contract verification artifacts: ${error.message}`
+    )
+    return { artifacts: null, response: null }
   }
 }
 
@@ -41599,50 +41602,50 @@ async function processContractVerificationArtifacts(workingDir, options = {}) {
  * @param workingDir
  */
 async function executeDeploy(deployCmd, workingDir) {
-  console.log(`Executing deploy command: ${deployCmd}`);
-  console.log(`Working directory: ${workingDir}`);
+  console.log(`Executing deploy command: ${deployCmd}`)
+  console.log(`Working directory: ${workingDir}`)
 
   const promise = new Promise((resolve, reject) => {
     const child = spawn(deployCmd, {
       shell: true,
       cwd: workingDir,
-      stdio: "inherit",
-    });
+      stdio: 'inherit',
+    })
 
-    child.on("error", (error) => {
-      console.error(`Error executing deploy command: ${error.message}`);
-      reject(error);
-    });
+    child.on('error', (error) => {
+      console.error(`Error executing deploy command: ${error.message}`)
+      reject(error)
+    })
 
-    child.on("close", (code) => {
+    child.on('close', (code) => {
       if (code !== 0) {
-        console.error(`Deployment failed with exit code ${code}`);
+        console.error(`Deployment failed with exit code ${code}`)
       } else {
-        console.log("Deployment completed successfully");
+        console.log('Deployment completed successfully')
       }
-      resolve(code);
-    });
-  });
+      resolve(code)
+    })
+  })
 
-  const exitCode = await promise;
+  const exitCode = await promise
 
   // Process test resimulation artifacts after deployment
   await processTestResimulationArtifacts(workingDir, {
-    status: exitCode === 0 ? "success" : "failed",
+    status: exitCode === 0 ? 'success' : 'failed',
     message:
       exitCode === 0
-        ? "Deployment completed successfully"
+        ? 'Deployment completed successfully'
         : `Deployment failed with exit code ${exitCode}`,
-  });
+  })
 
   // Process the auto verification artifacts
   await processContractVerificationArtifacts(workingDir, {
-    status: exitCode === 0 ? "success" : "failed",
+    status: exitCode === 0 ? 'success' : 'failed',
     message:
       exitCode === 0
-        ? "Deployment completed successfully"
+        ? 'Deployment completed successfully'
         : `Deployment failed with exit code ${exitCode}`,
-  });
+  })
 }
 
 /**
@@ -41651,7 +41654,7 @@ async function executeDeploy(deployCmd, workingDir) {
  * @returns {Array} - Array of extracted contract data
  */
 const extractContractData = (data) => {
-  const arrayData = Array.isArray(data) ? data : [data]; // Ensure data is an array
+  const arrayData = Array.isArray(data) ? data : [data] // Ensure data is an array
 
   return arrayData.map((item) => ({
     chainId: item.chainId || null,
@@ -41666,8 +41669,8 @@ const extractContractData = (data) => {
             contractAddress: tx.contractAddress,
           }))
       : [], // Default to an empty array if transactions are missing
-  }));
-};
+  }))
+}
 
 /**
  * Sends deployment notification to the backend service
@@ -41675,28 +41678,27 @@ const extractContractData = (data) => {
  */
 async function sendNotificationToBackend(deploymentData) {
   try {
-    const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`;
+    const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl =
-      process.env.BUILDBEAR_BASE_URL || "https://api.buildbear.io";
-    const notificationEndpoint = `${baseUrl}/ci/deployment-notification`;
+    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
+    const notificationEndpoint = `${baseUrl}/ci/webhook/${src_API_KEY}`
 
-    let status = deploymentData.status;
-    let summary = deploymentData.summary ?? "";
-    let deployments = [];
+    let status = deploymentData.status
+    let summary = deploymentData.summary ?? ''
+    let deployments = []
 
     // Process deployment data if not "deployment started" or already "failed"
-    if (status !== "deployment started" && status !== "failed") {
+    if (status !== 'deployment started' && status !== 'failed') {
       // Extract contract data
-      deployments = extractContractData(deploymentData.deployments);
+      deployments = extractContractData(deploymentData.deployments)
 
       // Validate deployment success
-      const validation = validateDeployment(deployments);
+      const validation = validateDeployment(deployments)
 
       if (!validation.valid) {
         // Update status to failed if validation fails
-        status = "failed";
-        summary = validation.message;
+        status = 'failed'
+        summary = validation.message
       }
     }
 
@@ -41710,13 +41712,13 @@ async function sendNotificationToBackend(deploymentData) {
       summary: summary,
       deployments: deployments,
       timestamp: new Date().toISOString(),
-    };
+    }
 
-    await axios.post(notificationEndpoint, payload);
+    await axios.post(notificationEndpoint, payload)
 
     // If the status was changed to failed, we should fail the GitHub Action
-    if (status === "failed" && deploymentData.status !== "failed") {
-      core.setFailed(summary);
+    if (status === 'failed' && deploymentData.status !== 'failed') {
+      core.setFailed(summary)
     }
   } catch (error) {
     // Don't throw error to prevent action failure due to notification issues
@@ -41732,123 +41734,123 @@ const validateDeployment = (extractedData) => {
   // Check if we have any valid transactions across all deployments
   const hasValidTransactions = extractedData.some(
     (deployment) =>
-      deployment.transactions && deployment.transactions.length > 0,
-  );
+      deployment.transactions && deployment.transactions.length > 0
+  )
 
   if (!hasValidTransactions) {
     return {
       valid: false,
       message:
-        "No contract deployments found. All transactions are missing required data.",
-    };
+        'No contract deployments found. All transactions are missing required data.',
+    }
   }
 
   return {
     valid: true,
-    message: "Deployment successful",
-  };
-};
+    message: 'Deployment successful',
+  }
+}
 
-(async () => {
+;(async () => {
   try {
     let deploymentNotificationData = {
-      status: "deployment started",
-    };
-    await sendNotificationToBackend(deploymentNotificationData);
+      status: 'deployment started',
+    }
+    await sendNotificationToBackend(deploymentNotificationData)
     // Get the input values
-    const network = JSON.parse(core.getInput("network", { required: true }));
-    const deployCmd = core.getInput("deploy-command", { required: true });
+    const network = JSON.parse(core.getInput('network', { required: true }))
+    const deployCmd = core.getInput('deploy-command', { required: true })
     const workingDir = path.join(
       process.cwd(),
-      core.getInput("working-directory", {
+      core.getInput('working-directory', {
         required: false,
-      }),
-    );
-    const repoName = github.context.repo.repo; // Get repository name
-    const commitHash = github.context.sha; // Get commit hash
+      })
+    )
+    const repoName = github.context.repo.repo // Get repository name
+    const commitHash = github.context.sha // Get commit hash
 
-    console.log("Network details:", network);
-    console.log(`Deploy command: ${deployCmd}`);
+    console.log('Network details:', network)
+    console.log(`Deploy command: ${deployCmd}`)
 
     // Initialize array to store all deployments
-    const allDeployments = [];
+    const allDeployments = []
 
     // Loop through the network and create nodes
     for (const net of network) {
-      console.log(`\n🔄 Processing network with chainId: ${net.chainId}`);
+      console.log(`\n🔄 Processing network with chainId: ${net.chainId}`)
 
-      let blockNumber;
+      let blockNumber
 
       if (net.blockNumber === undefined) {
         // If blockNumber is not present in the network object, retrieve the latest block number
-        blockNumber = await getLatestBlockNumber(parseInt(net.chainId));
+        blockNumber = await getLatestBlockNumber(parseInt(net.chainId))
       } else {
         // If blockNumber is present in the network object, use it
-        blockNumber = net.blockNumber;
+        blockNumber = net.blockNumber
       }
 
-      console.log(`Block number for chainId ${net.chainId}: ${blockNumber}`);
+      console.log(`Block number for chainId ${net.chainId}: ${blockNumber}`)
       // Create node
       const { url: rpcUrl, sandboxId } = await createNode(
         repoName,
         commitHash,
         net.chainId,
-        blockNumber,
-      );
+        blockNumber
+      )
 
       // Check if the node is live by continuously checking until successful or max retries
-      const isNodeLive = await checkNodeLiveness(rpcUrl);
+      const isNodeLive = await checkNodeLiveness(rpcUrl)
 
       if (isNodeLive) {
-        console.log(`\n📄 Executing deployment for chainId ${net.chainId}`);
+        console.log(`\n📄 Executing deployment for chainId ${net.chainId}`)
         // 5 seconds delay before logging the URL
-        setTimeout(() => {}, 5000);
+        setTimeout(() => {}, 5000)
 
         // Execute the deploy command after node becomes live
-        await executeDeploy(deployCmd, workingDir);
+        await executeDeploy(deployCmd, workingDir)
 
         // Process broadcast directory
         const deploymentData = await processBroadcastDirectory(
           net.chainId,
-          workingDir,
-        );
+          workingDir
+        )
 
         // Set deployment details as output
         const deploymentDetails = {
           chainId: net.chainId,
           rpcUrl,
           sandboxId,
-          status: "success",
+          status: 'success',
           deployments: deploymentData,
-        };
+        }
 
         // Add to deployments array
-        allDeployments.push(deploymentDetails);
+        allDeployments.push(deploymentDetails)
       } else {
         console.error(
-          `Node is not live for URL: ${rpcUrl}. Skipping deployment.`,
-        );
+          `Node is not live for URL: ${rpcUrl}. Skipping deployment.`
+        )
       }
     }
 
-    console.log("=".repeat(100));
+    console.log('='.repeat(100))
     // Print final summary for all deployments
-    console.log("\n\n🚀🚀 DEPLOYMENT SUMMARY");
-    console.log("=".repeat(100));
+    console.log('\n\n🚀🚀 DEPLOYMENT SUMMARY')
+    console.log('='.repeat(100))
 
     allDeployments.forEach((deployment, index) => {
-      console.log(`\nChain ID: ${deployment.chainId}`);
+      console.log(`\nChain ID: ${deployment.chainId}`)
 
-      if (deployment.status === "failed") {
-        console.log(`Status: ❌ Failed`);
-        console.log(`Error: ${deployment.error}`);
-        console.log("=".repeat(100));
-        return;
+      if (deployment.status === 'failed') {
+        console.log(`Status: ❌ Failed`)
+        console.log(`Error: ${deployment.error}`)
+        console.log('='.repeat(100))
+        return
       }
 
-      console.log(`Sandbox ID: ${deployment.sandboxId}`);
-      console.log(`RPC URL: ${deployment.rpcUrl}`);
-      console.log("\nDeployed Contracts:");
+      console.log(`Sandbox ID: ${deployment.sandboxId}`)
+      console.log(`RPC URL: ${deployment.rpcUrl}`)
+      console.log('\nDeployed Contracts:')
 
       if (deployment.deployments && deployment.deployments.receipts) {
         deployment.deployments.receipts
@@ -41857,49 +41859,45 @@ const validateDeployment = (extractedData) => {
             const transaction = deployment.deployments.transactions.find(
               (tx) =>
                 tx.contractAddress?.toLowerCase() ===
-                receipt.contractAddress?.toLowerCase(),
-            );
+                receipt.contractAddress?.toLowerCase()
+            )
             const contractName = transaction
               ? transaction.contractName
-              : "Unknown Contract";
+              : 'Unknown Contract'
 
             console.log(
-              `\n${idx + 1}. ${contractName}: ${receipt.contractAddress || "N/A"}`,
-            );
-            console.log(`   Transaction Hash: ${receipt.transactionHash}`);
-            console.log(`   Block Number: ${receipt.blockNumber}`);
-            console.log(`   Gas Used: ${receipt.gasUsed}`);
-            console.log(
-              `   Cumulative Gas Used : ${receipt.cumulativeGasUsed}`,
-            );
-            console.log(
-              `   Effective Gas Price : ${receipt.effectiveGasPrice}`,
-            );
-          });
+              `\n${idx + 1}. ${contractName}: ${receipt.contractAddress || 'N/A'}`
+            )
+            console.log(`   Transaction Hash: ${receipt.transactionHash}`)
+            console.log(`   Block Number: ${receipt.blockNumber}`)
+            console.log(`   Gas Used: ${receipt.gasUsed}`)
+            console.log(`   Cumulative Gas Used : ${receipt.cumulativeGasUsed}`)
+            console.log(`   Effective Gas Price : ${receipt.effectiveGasPrice}`)
+          })
       }
 
       // Add separator between deployments
       if (index < allDeployments.length - 1) {
-        console.log("\n" + "=".repeat(100));
+        console.log('\n' + '='.repeat(100))
       }
-    });
+    })
 
     deploymentNotificationData = {
-      status: "success",
+      status: 'success',
       deployments: allDeployments,
-    };
-    await sendNotificationToBackend(deploymentNotificationData);
+    }
+    await sendNotificationToBackend(deploymentNotificationData)
   } catch (error) {
     let deploymentNotificationData = {
-      status: "failed",
+      status: 'failed',
       summary: `Deployment failed`,
       deployments: [],
-    };
-    await sendNotificationToBackend(deploymentNotificationData);
+    }
+    await sendNotificationToBackend(deploymentNotificationData)
 
-    core.setFailed(error.message);
+    core.setFailed(error.message)
   }
-})();
+})()
 
 module.exports = __webpack_exports__;
 /******/ })()
