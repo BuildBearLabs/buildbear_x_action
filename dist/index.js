@@ -72626,7 +72626,8 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
     core.exportVariable('BUILDBEAR_RPC_URL', response.data.rpcUrl)
     core.exportVariable('MNEMONIC', response.data.mnemonic)
     return {
-      url: response.data.rpcUrl,
+      url: response.data.sandbox.rpcUrl,
+      sandboxId: response.data.sandbox.sandboxId,
     }
   } catch (error) {
     console.error('Error creating node:', error.response?.data || error.message)
@@ -72776,6 +72777,7 @@ async function processContractVerificationArtifacts(workingDir, options = {}) {
 
 async function getUmlTrace(workingDir) {
   const outDir = await findDirectory('out', workingDir)
+  const commitHash = github.context.sha
 
   // Check if directories exist
   try {
@@ -72788,9 +72790,7 @@ async function getUmlTrace(workingDir) {
   }
 
   const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
-  const response = await axios.get(
-    `${baseUrl}/ci/project/tests/4b6f9044-b5f0-4000-a4e0-63d5dff1d097/2eddc31fc888f85148a2c124f0d87951628121fe`
-  )
+  const response = await axios.get(`${baseUrl}/ci/project/tests/${commitHash}`)
   const txs = response.data.tests
   for (const tx of txs) {
     const rpcUrl = `https://rpc.dev.buildbear.io/${tx?.nodeId}`
@@ -72996,7 +72996,7 @@ const validateDeployment = (extractedData) => {
 
       console.log(`Block number for chainId ${net.chainId}: ${blockNumber}`)
       // Create node
-      const { url: rpcUrl } = await createNode(
+      const { url: rpcUrl, sandboxId } = await createNode(
         repoName,
         commitHash,
         net.chainId,
