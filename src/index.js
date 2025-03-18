@@ -19,6 +19,7 @@ const {
   sendContractArtifactsToBackend,
 } = require('./util/auto-verification/sendContractArtifacts')
 const { findDirectory } = require('./util/pathOperations')
+const { genUmlTrace } = require('./util/UmlTracer/genrateUml')
 
 const API_KEY = core.getInput('buildbear-token', { required: true })
 
@@ -189,7 +190,6 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
     core.exportVariable('MNEMONIC', response.data.mnemonic)
     return {
       url: response.data.rpcUrl,
-      sandboxId,
     }
   } catch (error) {
     console.error('Error creating node:', error.response?.data || error.message)
@@ -337,6 +337,31 @@ async function processContractVerificationArtifacts(workingDir, options = {}) {
   }
 }
 
+async function getUmlTrace(workingDir) {
+  const outDir = await findDirectory('out', workingDir)
+
+  // Check if directories exist
+  try {
+    await fs.access(outDir)
+  } catch (error) {
+    console.log(
+      `Required directories not found: ${error.message}. Skipping contract verification.`
+    )
+    return { artifacts: null, response: null }
+  }
+
+  const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
+  const response = await axios.get(
+    `${baseUrl}/ci/project/tests/4b6f9044-b5f0-4000-a4e0-63d5dff1d097/2eddc31fc888f85148a2c124f0d87951628121fe`
+  )
+  const txs = response.data.tests
+  for (const tx of txs) {
+    const rpcUrl = `https://rpc.dev.buildbear.io/${tx?.nodeId}`
+    const txHash = tx?.txHash
+    await genUmlTrace(outDir, rpcUrl, txHash)
+  }
+}
+
 /**
  * Executes the deployment command.
  *
@@ -388,6 +413,8 @@ async function executeDeploy(deployCmd, workingDir) {
         ? 'Deployment completed successfully'
         : `Deployment failed with exit code ${exitCode}`,
   })
+
+  await getUmlTrace(workingDir)
 }
 
 /**
@@ -401,7 +428,6 @@ const extractContractData = (data) => {
   return arrayData.map((item) => ({
     chainId: item.chainId || null,
     rpcUrl: item.rpcUrl || null,
-    sandboxId: item.sandboxId || null,
     transactions: Array.isArray(item.deployments?.transactions)
       ? item.deployments.transactions
           .filter((tx) => tx.contractName && tx.hash && tx.contractAddress) // Filter out incomplete transactions
@@ -533,7 +559,7 @@ const validateDeployment = (extractedData) => {
 
       console.log(`Block number for chainId ${net.chainId}: ${blockNumber}`)
       // Create node
-      const { url: rpcUrl, sandboxId } = await createNode(
+      const { url: rpcUrl } = await createNode(
         repoName,
         commitHash,
         net.chainId,
@@ -561,7 +587,6 @@ const validateDeployment = (extractedData) => {
         const deploymentDetails = {
           chainId: net.chainId,
           rpcUrl,
-          sandboxId,
           status: 'success',
           deployments: deploymentData,
         }
@@ -590,7 +615,6 @@ const validateDeployment = (extractedData) => {
         return
       }
 
-      console.log(`Sandbox ID: ${deployment.sandboxId}`)
       console.log(`RPC URL: ${deployment.rpcUrl}`)
       console.log('\nDeployed Contracts:')
 
