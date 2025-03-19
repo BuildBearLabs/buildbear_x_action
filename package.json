@@ -2,9 +2,13 @@
   "name": "buildbear_x_action",
   "version": "1.0.0",
   "description": "automate smart contract deployments across multiple networks using BuildBear’s infrastructure",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "format": "prettier --write src/**/*.js",
+    "lint": "eslint src/**/*.js --fix",
+    "build": "ncc build src/index.js -o dist",
+    "precommit": "npm run format && npm run lint && npm run build && git add .",
+    "prepare": "husky install"
   },
   "dependencies": {
     "@actions/core": "^1.11.1",
@@ -12,5 +16,19 @@
     "axios": "^1.7.7"
   },
   "author": "buildbear",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/release-notes-generator": "^14.0.3",
+    "@vercel/ncc": "^0.38.3",
+    "eslint": "^9.22.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-prettier": "^5.2.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.3",
+    "prettier": "^3.5.3",
+    "semantic-release": "^24.2.3"
+  }
 }

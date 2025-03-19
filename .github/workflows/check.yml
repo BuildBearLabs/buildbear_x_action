@@ -1,0 +1,33 @@
+name: Lint & Code Check
+
+on:
+  push:
+
+jobs:
+  lint:
+    name: Run Lint & Format Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ⚡ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+        env:
+          CI: true
+
+      - name: 🔎 Syntax Check
+        run: node --check .
+
+      - name: 🎯 Run ESLint (Fail on Warnings)
+        run: npm run lint -- --max-warnings=0
+
+      - name: 🎨 Run Prettier Check (No Auto-fix)
+        run: npm run format -- --check

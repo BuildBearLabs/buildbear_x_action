@@ -1,0 +1,30 @@
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# Husky hooks (generated files)
+.husky/_/
+
+# Editor & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs & debugging
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# GitHub Actions workflow logs
+.github/workflows/*.log
+
+# ESLint & Prettier caches
+.eslintcache/
+.prettier_cache/
+
+# Ignore coverage reports
+coverage/
+*.lcov
