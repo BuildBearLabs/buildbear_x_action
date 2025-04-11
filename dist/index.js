@@ -41610,6 +41610,9 @@ async function executeDeploy(deployCmd, workingDir) {
       shell: true,
       cwd: workingDir,
       stdio: 'inherit',
+      env: {
+        ...process.env,
+      },
     })
 
     child.on('error', (error) => {
