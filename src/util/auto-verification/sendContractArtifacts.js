@@ -45,7 +45,8 @@ async function sendContractArtifactsToBackend(
     }
 
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
+    const baseUrl =
+      process.env.BUILDBEAR_BASE_URL || 'https://api.dev.buildbear.io'
 
     // Send to backend
     const response = await axios.post(
