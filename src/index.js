@@ -185,8 +185,12 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
       },
     })
 
+    console.log('Response data :::::::::')
+    console.log(response.data)
+
     core.exportVariable('BUILDBEAR_RPC_URL', response.data.rpcUrl)
     core.exportVariable('MNEMONIC', response.data.mnemonic)
+
     return {
       url: response.data.sandbox.rpcUrl,
       sandboxId: response.data.sandbox.sandboxId,
@@ -352,6 +356,9 @@ async function executeDeploy(deployCmd, workingDir) {
       shell: true,
       cwd: workingDir,
       stdio: 'inherit',
+      env: {
+        ...process.env,
+      },
     })
 
     child.on('error', (error) => {
