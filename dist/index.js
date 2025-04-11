@@ -41443,8 +41443,20 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
       },
     })
 
-    core.exportVariable('BUILDBEAR_RPC_URL', response.data.rpcUrl)
-    core.exportVariable('MNEMONIC', response.data.mnemonic)
+    if (!response?.data?.sandbox) {
+      throw new Error('No sandbox data found in response')
+    }
+
+    if (
+      !response?.data?.sandbox?.rpcUrl ||
+      !response?.data?.sandbox?.mnemonic
+    ) {
+      throw new Error('No sandbox data found in response')
+    }
+
+    core.exportVariable('BUILDBEAR_RPC_URL', response?.data?.sandbox?.rpcUrl)
+    core.exportVariable('MNEMONIC', response?.data?.sandbox?.mnemonic)
+
     return {
       url: response.data.sandbox.rpcUrl,
       sandboxId: response.data.sandbox.sandboxId,
@@ -41610,6 +41622,9 @@ async function executeDeploy(deployCmd, workingDir) {
       shell: true,
       cwd: workingDir,
       stdio: 'inherit',
+      env: {
+        ...process.env,
+      },
     })
 
     child.on('error', (error) => {
