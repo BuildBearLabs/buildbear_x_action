@@ -41443,10 +41443,9 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
       },
     })
 
-    core.exportVariable('BUILDBEAR_RPC_URL', response.data.rpcUrl)
-    core.exportVariable('MNEMONIC', response.data.mnemonic)
-    process.env.BUILDBEAR_RPC_URL = response.data.rpcUrl;
-    process.env.MNEMONIC = response.data.mnemonic;
+    core.exportVariable('BUILDBEAR_RPC_URL', response.data.sandbox.rpcUrl)
+    core.exportVariable('MNEMONIC', response.data.sandbox.mnemonic)
+    
     return {
       url: response.data.sandbox.rpcUrl,
       sandboxId: response.data.sandbox.sandboxId,
