@@ -164,7 +164,11 @@ async function processBroadcastDirectory(chainId, workingDir) {
  */
 async function createNode(repoName, commitHash, chainId, blockNumber) {
   try {
-    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
+    const baseUrl = process.env.BUILDBEAR_BASE_URL
+    if (!baseUrl) {
+      throw new Error('BUILDBEAR_BASE_URL is not set')
+    }
+
     const url = `${baseUrl}/ci/webhook/${API_KEY}`
     const data = {
       task: 'create_node',
