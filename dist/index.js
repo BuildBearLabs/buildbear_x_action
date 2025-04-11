@@ -33853,7 +33853,8 @@ async function sendContractArtifactsToBackend(
     }
 
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
+    const baseUrl =
+      process.env.BUILDBEAR_BASE_URL || 'https://api.dev.buildbear.io'
 
     // Send to backend
     const response = await axios.post(
@@ -34514,7 +34515,8 @@ async function sendCompressedDataToBackend(compressedFilePath, metadata = {}) {
     }
 
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
+    const baseUrl =
+      process.env.BUILDBEAR_BASE_URL || 'https://api.dev.buildbear.io'
 
     // Send to backend
     const response = await axios.post(
@@ -41697,7 +41699,8 @@ async function sendNotificationToBackend(deploymentData) {
   try {
     const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
+    const baseUrl =
+      process.env.BUILDBEAR_BASE_URL || 'https://api.dev.buildbear.io'
     const notificationEndpoint = `${baseUrl}/ci/webhook/${src_API_KEY}`
 
     let status = deploymentData.status
