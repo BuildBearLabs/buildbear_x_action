@@ -164,8 +164,7 @@ async function processBroadcastDirectory(chainId, workingDir) {
  */
 async function createNode(repoName, commitHash, chainId, blockNumber) {
   try {
-    const baseUrl =
-      process.env.BUILDBEAR_BASE_URL || 'https://api.dev.buildbear.io'
+    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
 
     const url = `${baseUrl}/ci/webhook/${API_KEY}`
     const data = {
@@ -428,8 +427,7 @@ async function sendNotificationToBackend(deploymentData) {
   try {
     const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-    const baseUrl =
-      process.env.BUILDBEAR_BASE_URL || 'https://api.dev.buildbear.io'
+    const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
     const notificationEndpoint = `${baseUrl}/ci/webhook/${API_KEY}`
 
     let status = deploymentData.status
