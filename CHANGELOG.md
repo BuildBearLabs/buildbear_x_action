@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/BuildBearLabs/buildbear_x_action/compare/v1.6.0...v1.6.1) (2025-04-12)
+
+
+### Bug Fixes
+
+* api key fix ([8844bca](https://github.com/BuildBearLabs/buildbear_x_action/commit/8844bca5fbe8334b03ba8d9053e320d996094b42))
+
 # [1.5.0](https://github.com/BuildBearLabs/buildbear_x_action/compare/v1.4.1...v1.5.0) (2025-03-19)
 
 
