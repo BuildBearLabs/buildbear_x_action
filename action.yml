@@ -4,10 +4,10 @@ description: "automate smart contract deployments across multiple networks using
 inputs:
   network:
     description: "List of networks you want to deploy on"
-    required: true
+    required: false
   deploy-command:
     description: "Command to deploy the contract"
-    required: true
+    required: false
   buildbear-token:
     description: "Buildbear API token"
     required: true

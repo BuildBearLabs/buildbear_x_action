@@ -188,7 +188,7 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
 
     core.exportVariable('BUILDBEAR_RPC_URL', response.data.sandbox.rpcUrl)
     core.exportVariable('MNEMONIC', response.data.sandbox.mnemonic)
-    
+
     return {
       url: response.data.sandbox.rpcUrl,
       sandboxId: response.data.sandbox.sandboxId,
@@ -340,58 +340,67 @@ async function processContractVerificationArtifacts(workingDir, options = {}) {
 }
 
 /**
- * Executes the deployment command.
+ * Executes the deployment command if provided, otherwise just processes test artifacts.
  *
- * @param {string} deployCmd - The command to deploy the contracts
- * @param workingDir
+ * @param {string|null} deployCmd - The command to deploy the contracts (optional)
+ * @param {string} workingDir - The working directory
  */
 async function executeDeploy(deployCmd, workingDir) {
-  console.log(`Executing deploy command: ${deployCmd}`)
-  console.log(`Working directory: ${workingDir}`)
+  let exitCode = 0
 
-  const promise = new Promise((resolve, reject) => {
-    const child = spawn(deployCmd, {
-      shell: true,
-      cwd: workingDir,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-      },
+  // Only attempt to execute the deploy command if it's provided
+  if (deployCmd) {
+    console.log(`Executing deploy command: ${deployCmd}`)
+    console.log(`Working directory: ${workingDir}`)
+
+    const promise = new Promise((resolve, reject) => {
+      const child = spawn(deployCmd, {
+        shell: true,
+        cwd: workingDir,
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+        },
+      })
+
+      child.on('error', (error) => {
+        console.error(`Error executing deploy command: ${error.message}`)
+        reject(error)
+      })
+
+      child.on('close', (code) => {
+        if (code !== 0) {
+          console.error(`Deployment failed with exit code ${code}`)
+        } else {
+          console.log('Deployment completed successfully')
+        }
+        resolve(code)
+      })
     })
 
-    child.on('error', (error) => {
-      console.error(`Error executing deploy command: ${error.message}`)
-      reject(error)
-    })
+    exitCode = await promise
+  } else {
+    console.log('No deploy command provided. Skipping deployment execution.')
+  }
 
-    child.on('close', (code) => {
-      if (code !== 0) {
-        console.error(`Deployment failed with exit code ${code}`)
-      } else {
-        console.log('Deployment completed successfully')
-      }
-      resolve(code)
-    })
-  })
-
-  const exitCode = await promise
-
-  // Process test resimulation artifacts after deployment
+  // Process test resimulation artifacts regardless of whether deployment was executed
   await processTestResimulationArtifacts(workingDir, {
     status: exitCode === 0 ? 'success' : 'failed',
-    message:
-      exitCode === 0
+    message: deployCmd
+      ? exitCode === 0
         ? 'Deployment completed successfully'
-        : `Deployment failed with exit code ${exitCode}`,
+        : `Deployment failed with exit code ${exitCode}`
+      : 'Processing test artifacts only (no deployment)',
   })
 
-  // Process the auto verification artifacts
+  // Process the auto verification artifacts regardless of whether deployment was executed
   await processContractVerificationArtifacts(workingDir, {
     status: exitCode === 0 ? 'success' : 'failed',
-    message:
-      exitCode === 0
+    message: deployCmd
+      ? exitCode === 0
         ? 'Deployment completed successfully'
-        : `Deployment failed with exit code ${exitCode}`,
+        : `Deployment failed with exit code ${exitCode}`
+      : 'Processing contract artifacts only (no deployment)',
   })
 }
 
@@ -505,8 +514,11 @@ const validateDeployment = (extractedData) => {
     }
     await sendNotificationToBackend(deploymentNotificationData)
     // Get the input values
-    const network = JSON.parse(core.getInput('network', { required: true }))
-    const deployCmd = core.getInput('deploy-command', { required: true })
+    // Get the input values
+    const networkInput = core.getInput('network', { required: false })
+    const network = networkInput ? JSON.parse(networkInput) : []
+    const deployCmd = core.getInput('deploy-command', { required: false })
+
     const workingDir = path.join(
       process.cwd(),
       core.getInput('working-directory', {
@@ -522,61 +534,72 @@ const validateDeployment = (extractedData) => {
     // Initialize array to store all deployments
     const allDeployments = []
 
-    // Loop through the network and create nodes
-    for (const net of network) {
-      console.log(`\n🔄 Processing network with chainId: ${net.chainId}`)
+    // Only process networks if any are provided
+    if (network && network.length > 0) {
+      // Loop through the network and create nodes
+      for (const net of network) {
+        console.log(`\n🔄 Processing network with chainId: ${net.chainId}`)
 
-      let blockNumber
+        let blockNumber
 
-      if (net.blockNumber === undefined) {
-        // If blockNumber is not present in the network object, retrieve the latest block number
-        blockNumber = await getLatestBlockNumber(parseInt(net.chainId))
-      } else {
-        // If blockNumber is present in the network object, use it
-        blockNumber = net.blockNumber
-      }
-
-      console.log(`Block number for chainId ${net.chainId}: ${blockNumber}`)
-      // Create node
-      const { url: rpcUrl, sandboxId } = await createNode(
-        repoName,
-        commitHash,
-        net.chainId,
-        blockNumber
-      )
-
-      // Check if the node is live by continuously checking until successful or max retries
-      const isNodeLive = await checkNodeLiveness(rpcUrl)
-
-      if (isNodeLive) {
-        console.log(`\n📄 Executing deployment for chainId ${net.chainId}`)
-        // 5 seconds delay before logging the URL
-        setTimeout(() => {}, 5000)
-
-        // Execute the deploy command after node becomes live
-        await executeDeploy(deployCmd, workingDir)
-
-        // Process broadcast directory
-        const deploymentData = await processBroadcastDirectory(
-          net.chainId,
-          workingDir
-        )
-
-        // Set deployment details as output
-        const deploymentDetails = {
-          chainId: net.chainId,
-          rpcUrl,
-          sandboxId,
-          status: 'success',
-          deployments: deploymentData,
+        if (net.blockNumber === undefined) {
+          // If blockNumber is not present in the network object, retrieve the latest block number
+          blockNumber = await getLatestBlockNumber(parseInt(net.chainId))
+        } else {
+          // If blockNumber is present in the network object, use it
+          blockNumber = net.blockNumber
         }
 
-        // Add to deployments array
-        allDeployments.push(deploymentDetails)
-      } else {
-        console.error(
-          `Node is not live for URL: ${rpcUrl}. Skipping deployment.`
+        console.log(`Block number for chainId ${net.chainId}: ${blockNumber}`)
+        // Create node
+        const { url: rpcUrl, sandboxId } = await createNode(
+          repoName,
+          commitHash,
+          net.chainId,
+          blockNumber
         )
+
+        // Check if the node is live by continuously checking until successful or max retries
+        const isNodeLive = await checkNodeLiveness(rpcUrl)
+
+        if (isNodeLive) {
+          console.log(`\n📄 Executing deployment for chainId ${net.chainId}`)
+          // 5 seconds delay before logging the URL
+          setTimeout(() => {}, 5000)
+
+          // Execute the deploy command after node becomes live
+          await executeDeploy(deployCmd, workingDir)
+
+          // Process broadcast directory
+          const deploymentData = await processBroadcastDirectory(
+            net.chainId,
+            workingDir
+          )
+
+          // Set deployment details as output
+          const deploymentDetails = {
+            chainId: net.chainId,
+            rpcUrl,
+            sandboxId,
+            status: 'success',
+            deployments: deploymentData,
+          }
+
+          // Add to deployments array
+          allDeployments.push(deploymentDetails)
+        } else {
+          console.error(
+            `Node is not live for URL: ${rpcUrl}. Skipping deployment.`
+          )
+        }
+      }
+    } else {
+      console.log(
+        'No network configuration provided. Skipping node creation and deployment.'
+      )
+      // Even without a network, process artifacts in the working directory
+      if (workingDir) {
+        await executeDeploy(deployCmd, workingDir)
       }
     }
 

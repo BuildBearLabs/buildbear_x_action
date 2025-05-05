@@ -36428,10 +36428,11 @@ module.exports = parseParams
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 "use strict";
-// Axios v1.7.7 Copyright (c) 2024 Matt Zabriskie and contributors
+/*! Axios v1.8.2 Copyright (c) 2025 Matt Zabriskie and contributors */
 
 
 const FormData$1 = __nccwpck_require__(6454);
+const crypto = __nccwpck_require__(6982);
 const url = __nccwpck_require__(7016);
 const proxyFromEnv = __nccwpck_require__(7777);
 const http = __nccwpck_require__(8611);
@@ -36445,7 +36446,9 @@ const events = __nccwpck_require__(4434);
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
 const FormData__default = /*#__PURE__*/_interopDefaultLegacy(FormData$1);
+const crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
 const url__default = /*#__PURE__*/_interopDefaultLegacy(url);
+const proxyFromEnv__default = /*#__PURE__*/_interopDefaultLegacy(proxyFromEnv);
 const http__default = /*#__PURE__*/_interopDefaultLegacy(http);
 const https__default = /*#__PURE__*/_interopDefaultLegacy(https);
 const util__default = /*#__PURE__*/_interopDefaultLegacy(util);
@@ -37059,26 +37062,6 @@ const toFiniteNumber = (value, defaultValue) => {
   return value != null && Number.isFinite(value = +value) ? value : defaultValue;
 };
 
-const ALPHA = 'abcdefghijklmnopqrstuvwxyz';
-
-const DIGIT = '0123456789';
-
-const ALPHABET = {
-  DIGIT,
-  ALPHA,
-  ALPHA_DIGIT: ALPHA + ALPHA.toUpperCase() + DIGIT
-};
-
-const generateString = (size = 16, alphabet = ALPHABET.ALPHA_DIGIT) => {
-  let str = '';
-  const {length} = alphabet;
-  while (size--) {
-    str += alphabet[Math.random() * length|0];
-  }
-
-  return str;
-};
-
 /**
  * If the thing is a FormData object, return true, otherwise return false.
  *
@@ -37206,8 +37189,6 @@ const utils$1 = {
   findKey,
   global: _global,
   isContextDefined,
-  ALPHABET,
-  generateString,
   isSpecCompliantForm,
   toJSONObject,
   isAsyncFn,
@@ -37601,7 +37582,7 @@ function encode(val) {
  *
  * @param {string} url The base of the url (e.g., http://www.google.com)
  * @param {object} [params] The params to be appended
- * @param {?object} options
+ * @param {?(object|Function)} options
  *
  * @returns {string} The formatted url
  */
@@ -37612,6 +37593,12 @@ function buildURL(url, params, options) {
   }
   
   const _encode = options && options.encode || encode;
+
+  if (utils$1.isFunction(options)) {
+    options = {
+      serialize: options
+    };
+  } 
 
   const serializeFn = options && options.serialize;
 
@@ -37713,6 +37700,29 @@ const transitionalDefaults = {
 
 const URLSearchParams = url__default["default"].URLSearchParams;
 
+const ALPHA = 'abcdefghijklmnopqrstuvwxyz';
+
+const DIGIT = '0123456789';
+
+const ALPHABET = {
+  DIGIT,
+  ALPHA,
+  ALPHA_DIGIT: ALPHA + ALPHA.toUpperCase() + DIGIT
+};
+
+const generateString = (size = 16, alphabet = ALPHABET.ALPHA_DIGIT) => {
+  let str = '';
+  const {length} = alphabet;
+  const randomValues = new Uint32Array(size);
+  crypto__default["default"].randomFillSync(randomValues);
+  for (let i = 0; i < size; i++) {
+    str += alphabet[randomValues[i] % length];
+  }
+
+  return str;
+};
+
+
 const platform$1 = {
   isNode: true,
   classes: {
@@ -37720,6 +37730,8 @@ const platform$1 = {
     FormData: FormData__default["default"],
     Blob: typeof Blob !== 'undefined' && Blob || null
   },
+  ALPHABET,
+  generateString,
   protocols: [ 'http', 'https', 'file', 'data' ]
 };
 
@@ -38494,14 +38506,15 @@ function combineURLs(baseURL, relativeURL) {
  *
  * @returns {string} The combined full path
  */
-function buildFullPath(baseURL, requestedURL) {
-  if (baseURL && !isAbsoluteURL(requestedURL)) {
+function buildFullPath(baseURL, requestedURL, allowAbsoluteUrls) {
+  let isRelativeUrl = !isAbsoluteURL(requestedURL);
+  if (baseURL && isRelativeUrl || allowAbsoluteUrls == false) {
     return combineURLs(baseURL, requestedURL);
   }
   return requestedURL;
 }
 
-const VERSION = "1.7.7";
+const VERSION = "1.8.2";
 
 function parseProtocol(url) {
   const match = /^([-+\w]{1,25})(:?\/\/|:)/.exec(url);
@@ -38711,9 +38724,9 @@ const readBlob = async function* (blob) {
 
 const readBlob$1 = readBlob;
 
-const BOUNDARY_ALPHABET = utils$1.ALPHABET.ALPHA_DIGIT + '-_';
+const BOUNDARY_ALPHABET = platform.ALPHABET.ALPHA_DIGIT + '-_';
 
-const textEncoder = new util.TextEncoder();
+const textEncoder = typeof TextEncoder === 'function' ? new TextEncoder() : new util__default["default"].TextEncoder();
 
 const CRLF = '\r\n';
 const CRLF_BYTES = textEncoder.encode(CRLF);
@@ -38771,7 +38784,7 @@ const formDataToStream = (form, headersHandler, options) => {
   const {
     tag = 'form-data-boundary',
     size = 25,
-    boundary = tag + '-' + utils$1.generateString(size, BOUNDARY_ALPHABET)
+    boundary = tag + '-' + platform.generateString(size, BOUNDARY_ALPHABET)
   } = options || {};
 
   if(!utils$1.isFormData(form)) {
@@ -39051,7 +39064,7 @@ function dispatchBeforeRedirect(options, responseDetails) {
 function setProxy(options, configProxy, location) {
   let proxy = configProxy;
   if (!proxy && proxy !== false) {
-    const proxyUrl = proxyFromEnv.getProxyForUrl(location);
+    const proxyUrl = proxyFromEnv__default["default"].getProxyForUrl(location);
     if (proxyUrl) {
       proxy = new URL(proxyUrl);
     }
@@ -39196,7 +39209,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
     }
 
     // Parse url
-    const fullPath = buildFullPath(config.baseURL, config.url);
+    const fullPath = buildFullPath(config.baseURL, config.url, config.allowAbsoluteUrls);
     const parsed = new URL(fullPath, platform.hasBrowserEnv ? platform.origin : undefined);
     const protocol = parsed.protocol || supportedProtocols[0];
 
@@ -39282,7 +39295,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
         } catch (e) {
         }
       }
-    } else if (utils$1.isBlob(data)) {
+    } else if (utils$1.isBlob(data) || utils$1.isFile(data)) {
       data.size && headers.setContentType(data.type || 'application/octet-stream');
       headers.setContentLength(data.size || 0);
       data = stream__default["default"].Readable.from(readBlob$1(data));
@@ -39535,7 +39548,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
           }
 
           const err = new AxiosError(
-            'maxContentLength size of ' + config.maxContentLength + ' exceeded',
+            'stream has been aborted',
             AxiosError.ERR_BAD_RESPONSE,
             config,
             lastRequest
@@ -39658,68 +39671,18 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
   });
 };
 
-const isURLSameOrigin = platform.hasStandardBrowserEnv ?
+const isURLSameOrigin = platform.hasStandardBrowserEnv ? ((origin, isMSIE) => (url) => {
+  url = new URL(url, platform.origin);
 
-// Standard browser envs have full support of the APIs needed to test
-// whether the request URL is of the same origin as current location.
-  (function standardBrowserEnv() {
-    const msie = platform.navigator && /(msie|trident)/i.test(platform.navigator.userAgent);
-    const urlParsingNode = document.createElement('a');
-    let originURL;
-
-    /**
-    * Parse a URL to discover its components
-    *
-    * @param {String} url The URL to be parsed
-    * @returns {Object}
-    */
-    function resolveURL(url) {
-      let href = url;
-
-      if (msie) {
-        // IE needs attribute set twice to normalize properties
-        urlParsingNode.setAttribute('href', href);
-        href = urlParsingNode.href;
-      }
-
-      urlParsingNode.setAttribute('href', href);
-
-      // urlParsingNode provides the UrlUtils interface - http://url.spec.whatwg.org/#urlutils
-      return {
-        href: urlParsingNode.href,
-        protocol: urlParsingNode.protocol ? urlParsingNode.protocol.replace(/:$/, '') : '',
-        host: urlParsingNode.host,
-        search: urlParsingNode.search ? urlParsingNode.search.replace(/^\?/, '') : '',
-        hash: urlParsingNode.hash ? urlParsingNode.hash.replace(/^#/, '') : '',
-        hostname: urlParsingNode.hostname,
-        port: urlParsingNode.port,
-        pathname: (urlParsingNode.pathname.charAt(0) === '/') ?
-          urlParsingNode.pathname :
-          '/' + urlParsingNode.pathname
-      };
-    }
-
-    originURL = resolveURL(window.location.href);
-
-    /**
-    * Determine if a URL shares the same origin as the current location
-    *
-    * @param {String} requestURL The URL to test
-    * @returns {boolean} True if URL shares the same origin, otherwise false
-    */
-    return function isURLSameOrigin(requestURL) {
-      const parsed = (utils$1.isString(requestURL)) ? resolveURL(requestURL) : requestURL;
-      return (parsed.protocol === originURL.protocol &&
-          parsed.host === originURL.host);
-    };
-  })() :
-
-  // Non standard browser envs (web workers, react-native) lack needed support.
-  (function nonStandardBrowserEnv() {
-    return function isURLSameOrigin() {
-      return true;
-    };
-  })();
+  return (
+    origin.protocol === url.protocol &&
+    origin.host === url.host &&
+    (isMSIE || origin.port === url.port)
+  );
+})(
+  new URL(platform.origin),
+  platform.navigator && /(msie|trident)/i.test(platform.navigator.userAgent)
+) : () => true;
 
 const cookies = platform.hasStandardBrowserEnv ?
 
@@ -39776,7 +39739,7 @@ function mergeConfig(config1, config2) {
   config2 = config2 || {};
   const config = {};
 
-  function getMergedValue(target, source, caseless) {
+  function getMergedValue(target, source, prop, caseless) {
     if (utils$1.isPlainObject(target) && utils$1.isPlainObject(source)) {
       return utils$1.merge.call({caseless}, target, source);
     } else if (utils$1.isPlainObject(source)) {
@@ -39788,11 +39751,11 @@ function mergeConfig(config1, config2) {
   }
 
   // eslint-disable-next-line consistent-return
-  function mergeDeepProperties(a, b, caseless) {
+  function mergeDeepProperties(a, b, prop , caseless) {
     if (!utils$1.isUndefined(b)) {
-      return getMergedValue(a, b, caseless);
+      return getMergedValue(a, b, prop , caseless);
     } else if (!utils$1.isUndefined(a)) {
-      return getMergedValue(undefined, a, caseless);
+      return getMergedValue(undefined, a, prop , caseless);
     }
   }
 
@@ -39850,7 +39813,7 @@ function mergeConfig(config1, config2) {
     socketPath: defaultToConfig2,
     responseEncoding: defaultToConfig2,
     validateStatus: mergeDirectKeys,
-    headers: (a, b) => mergeDeepProperties(headersToObject(a), headersToObject(b), true)
+    headers: (a, b , prop) => mergeDeepProperties(headersToObject(a), headersToObject(b),prop, true)
   };
 
   utils$1.forEach(Object.keys(Object.assign({}, config1, config2)), function computeConfigValue(prop) {
@@ -40643,6 +40606,14 @@ validators$1.transitional = function transitional(validator, version, message) {
   };
 };
 
+validators$1.spelling = function spelling(correctSpelling) {
+  return (value, opt) => {
+    // eslint-disable-next-line no-console
+    console.warn(`${opt} is likely a misspelling of ${correctSpelling}`);
+    return true;
+  }
+};
+
 /**
  * Assert object's properties type
  *
@@ -40712,9 +40683,9 @@ class Axios {
       return await this._request(configOrUrl, config);
     } catch (err) {
       if (err instanceof Error) {
-        let dummy;
+        let dummy = {};
 
-        Error.captureStackTrace ? Error.captureStackTrace(dummy = {}) : (dummy = new Error());
+        Error.captureStackTrace ? Error.captureStackTrace(dummy) : (dummy = new Error());
 
         // slice off the Error: ... line
         const stack = dummy.stack ? dummy.stack.replace(/^.+\n/, '') : '';
@@ -40768,6 +40739,18 @@ class Axios {
         }, true);
       }
     }
+
+    // Set config.allowAbsoluteUrls
+    if (config.allowAbsoluteUrls !== undefined) ; else if (this.defaults.allowAbsoluteUrls !== undefined) {
+      config.allowAbsoluteUrls = this.defaults.allowAbsoluteUrls;
+    } else {
+      config.allowAbsoluteUrls = true;
+    }
+
+    validator.assertOptions(config, {
+      baseUrl: validators.spelling('baseURL'),
+      withXsrfToken: validators.spelling('withXSRFToken')
+    }, true);
 
     // Set config.method
     config.method = (config.method || this.defaults.method || 'get').toLowerCase();
@@ -40859,7 +40842,7 @@ class Axios {
 
   getUri(config) {
     config = mergeConfig(this.defaults, config);
-    const fullPath = buildFullPath(config.baseURL, config.url);
+    const fullPath = buildFullPath(config.baseURL, config.url, config.allowAbsoluteUrls);
     return buildURL(fullPath, config.params, config.paramsSerializer);
   }
 }
@@ -41451,7 +41434,7 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
 
     core.exportVariable('BUILDBEAR_RPC_URL', response.data.sandbox.rpcUrl)
     core.exportVariable('MNEMONIC', response.data.sandbox.mnemonic)
-    
+
     return {
       url: response.data.sandbox.rpcUrl,
       sandboxId: response.data.sandbox.sandboxId,
@@ -41603,58 +41586,67 @@ async function processContractVerificationArtifacts(workingDir, options = {}) {
 }
 
 /**
- * Executes the deployment command.
+ * Executes the deployment command if provided, otherwise just processes test artifacts.
  *
- * @param {string} deployCmd - The command to deploy the contracts
- * @param workingDir
+ * @param {string|null} deployCmd - The command to deploy the contracts (optional)
+ * @param {string} workingDir - The working directory
  */
 async function executeDeploy(deployCmd, workingDir) {
-  console.log(`Executing deploy command: ${deployCmd}`)
-  console.log(`Working directory: ${workingDir}`)
+  let exitCode = 0
 
-  const promise = new Promise((resolve, reject) => {
-    const child = spawn(deployCmd, {
-      shell: true,
-      cwd: workingDir,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-      },
+  // Only attempt to execute the deploy command if it's provided
+  if (deployCmd) {
+    console.log(`Executing deploy command: ${deployCmd}`)
+    console.log(`Working directory: ${workingDir}`)
+
+    const promise = new Promise((resolve, reject) => {
+      const child = spawn(deployCmd, {
+        shell: true,
+        cwd: workingDir,
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+        },
+      })
+
+      child.on('error', (error) => {
+        console.error(`Error executing deploy command: ${error.message}`)
+        reject(error)
+      })
+
+      child.on('close', (code) => {
+        if (code !== 0) {
+          console.error(`Deployment failed with exit code ${code}`)
+        } else {
+          console.log('Deployment completed successfully')
+        }
+        resolve(code)
+      })
     })
 
-    child.on('error', (error) => {
-      console.error(`Error executing deploy command: ${error.message}`)
-      reject(error)
-    })
+    exitCode = await promise
+  } else {
+    console.log('No deploy command provided. Skipping deployment execution.')
+  }
 
-    child.on('close', (code) => {
-      if (code !== 0) {
-        console.error(`Deployment failed with exit code ${code}`)
-      } else {
-        console.log('Deployment completed successfully')
-      }
-      resolve(code)
-    })
-  })
-
-  const exitCode = await promise
-
-  // Process test resimulation artifacts after deployment
+  // Process test resimulation artifacts regardless of whether deployment was executed
   await processTestResimulationArtifacts(workingDir, {
     status: exitCode === 0 ? 'success' : 'failed',
-    message:
-      exitCode === 0
+    message: deployCmd
+      ? exitCode === 0
         ? 'Deployment completed successfully'
-        : `Deployment failed with exit code ${exitCode}`,
+        : `Deployment failed with exit code ${exitCode}`
+      : 'Processing test artifacts only (no deployment)',
   })
 
-  // Process the auto verification artifacts
+  // Process the auto verification artifacts regardless of whether deployment was executed
   await processContractVerificationArtifacts(workingDir, {
     status: exitCode === 0 ? 'success' : 'failed',
-    message:
-      exitCode === 0
+    message: deployCmd
+      ? exitCode === 0
         ? 'Deployment completed successfully'
-        : `Deployment failed with exit code ${exitCode}`,
+        : `Deployment failed with exit code ${exitCode}`
+      : 'Processing contract artifacts only (no deployment)',
   })
 }
 
@@ -41768,8 +41760,11 @@ const validateDeployment = (extractedData) => {
     }
     await sendNotificationToBackend(deploymentNotificationData)
     // Get the input values
-    const network = JSON.parse(core.getInput('network', { required: true }))
-    const deployCmd = core.getInput('deploy-command', { required: true })
+    // Get the input values
+    const networkInput = core.getInput('network', { required: false })
+    const network = networkInput ? JSON.parse(networkInput) : []
+    const deployCmd = core.getInput('deploy-command', { required: false })
+
     const workingDir = path.join(
       process.cwd(),
       core.getInput('working-directory', {
@@ -41785,61 +41780,72 @@ const validateDeployment = (extractedData) => {
     // Initialize array to store all deployments
     const allDeployments = []
 
-    // Loop through the network and create nodes
-    for (const net of network) {
-      console.log(`\n🔄 Processing network with chainId: ${net.chainId}`)
+    // Only process networks if any are provided
+    if (network && network.length > 0) {
+      // Loop through the network and create nodes
+      for (const net of network) {
+        console.log(`\n🔄 Processing network with chainId: ${net.chainId}`)
 
-      let blockNumber
+        let blockNumber
 
-      if (net.blockNumber === undefined) {
-        // If blockNumber is not present in the network object, retrieve the latest block number
-        blockNumber = await getLatestBlockNumber(parseInt(net.chainId))
-      } else {
-        // If blockNumber is present in the network object, use it
-        blockNumber = net.blockNumber
-      }
-
-      console.log(`Block number for chainId ${net.chainId}: ${blockNumber}`)
-      // Create node
-      const { url: rpcUrl, sandboxId } = await createNode(
-        repoName,
-        commitHash,
-        net.chainId,
-        blockNumber
-      )
-
-      // Check if the node is live by continuously checking until successful or max retries
-      const isNodeLive = await checkNodeLiveness(rpcUrl)
-
-      if (isNodeLive) {
-        console.log(`\n📄 Executing deployment for chainId ${net.chainId}`)
-        // 5 seconds delay before logging the URL
-        setTimeout(() => {}, 5000)
-
-        // Execute the deploy command after node becomes live
-        await executeDeploy(deployCmd, workingDir)
-
-        // Process broadcast directory
-        const deploymentData = await processBroadcastDirectory(
-          net.chainId,
-          workingDir
-        )
-
-        // Set deployment details as output
-        const deploymentDetails = {
-          chainId: net.chainId,
-          rpcUrl,
-          sandboxId,
-          status: 'success',
-          deployments: deploymentData,
+        if (net.blockNumber === undefined) {
+          // If blockNumber is not present in the network object, retrieve the latest block number
+          blockNumber = await getLatestBlockNumber(parseInt(net.chainId))
+        } else {
+          // If blockNumber is present in the network object, use it
+          blockNumber = net.blockNumber
         }
 
-        // Add to deployments array
-        allDeployments.push(deploymentDetails)
-      } else {
-        console.error(
-          `Node is not live for URL: ${rpcUrl}. Skipping deployment.`
+        console.log(`Block number for chainId ${net.chainId}: ${blockNumber}`)
+        // Create node
+        const { url: rpcUrl, sandboxId } = await createNode(
+          repoName,
+          commitHash,
+          net.chainId,
+          blockNumber
         )
+
+        // Check if the node is live by continuously checking until successful or max retries
+        const isNodeLive = await checkNodeLiveness(rpcUrl)
+
+        if (isNodeLive) {
+          console.log(`\n📄 Executing deployment for chainId ${net.chainId}`)
+          // 5 seconds delay before logging the URL
+          setTimeout(() => {}, 5000)
+
+          // Execute the deploy command after node becomes live
+          await executeDeploy(deployCmd, workingDir)
+
+          // Process broadcast directory
+          const deploymentData = await processBroadcastDirectory(
+            net.chainId,
+            workingDir
+          )
+
+          // Set deployment details as output
+          const deploymentDetails = {
+            chainId: net.chainId,
+            rpcUrl,
+            sandboxId,
+            status: 'success',
+            deployments: deploymentData,
+          }
+
+          // Add to deployments array
+          allDeployments.push(deploymentDetails)
+        } else {
+          console.error(
+            `Node is not live for URL: ${rpcUrl}. Skipping deployment.`
+          )
+        }
+      }
+    } else {
+      console.log(
+        'No network configuration provided. Skipping node creation and deployment.'
+      )
+      // Even without a network, process artifacts in the working directory
+      if (workingDir) {
+        await executeDeploy(deployCmd, workingDir)
       }
     }
 
