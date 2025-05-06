@@ -33842,9 +33842,13 @@ async function sendContractArtifactsToBackend(
       payload: {
         repositoryName: github.context.repo.repo,
         repositoryOwner: github.context.repo.owner,
+        runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+        runId: github.context.job.toString(),
+        runNumber: github.context.runNumber,
+        branch: github.context?.ref?.replace('refs/heads/', ''),
+        author: github.context.actor,
         actionUrl: githubActionUrl,
         commitHash: github.context.sha,
-        workflow: github.context.workflow,
         message:
           metadata.message ||
           `Contract artifacts uploaded at ${new Date().toISOString()}`,
@@ -34495,7 +34499,11 @@ async function sendCompressedDataToBackend(compressedFilePath, metadata = {}) {
         repositoryOwner: github.context.repo.owner,
         actionUrl: githubActionUrl,
         commitHash: github.context.sha,
-        workflow: github.context.workflow,
+        runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+        runId: github.context.job.toString(),
+        runNumber: github.context.runNumber,
+        branch: github.context?.ref?.replace('refs/heads/', ''),
+        author: github.context.actor,
         message:
           metadata.message ||
           `Test artifacts uploaded at ${new Date().toISOString()}`,
@@ -34516,9 +34524,9 @@ async function sendCompressedDataToBackend(compressedFilePath, metadata = {}) {
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
     const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
 
-    const API_KEY = process.env.API_KEY;
+    const API_KEY = process.env.API_KEY
     if (!API_KEY) {
-      throw new Error("API_KEY is not set in environment");
+      throw new Error('API_KEY is not set in environment')
     }
 
     // Send to backend
@@ -41705,15 +41713,21 @@ async function sendNotificationToBackend(deploymentData) {
     }
 
     const payload = {
-      repositoryName: github.context.repo.repo,
-      repositoryOwner: github.context.repo.owner,
-      actionUrl: githubActionUrl,
-      commitHash: github.context.sha,
-      workflow: github.context.workflow,
-      status: status,
-      summary: summary,
-      deployments: deployments,
       timestamp: new Date().toISOString(),
+      status: status,
+      payload: {
+        runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+        runId: github.context.job.toString(),
+        runNumber: github.context.runNumber,
+        repositoryName: github.context.repo.repo,
+        repositoryOwner: github.context.repo.owner,
+        actionUrl: githubActionUrl,
+        commitHash: github.context.sha,
+        branch: github.context?.ref?.replace('refs/heads/', ''),
+        author: github.context.actor,
+        message: summary,
+        deployments: deployments,
+      },
     }
 
     await axios.post(notificationEndpoint, payload)

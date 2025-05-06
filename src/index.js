@@ -459,15 +459,21 @@ async function sendNotificationToBackend(deploymentData) {
     }
 
     const payload = {
-      repositoryName: github.context.repo.repo,
-      repositoryOwner: github.context.repo.owner,
-      actionUrl: githubActionUrl,
-      commitHash: github.context.sha,
-      workflow: github.context.workflow,
-      status: status,
-      summary: summary,
-      deployments: deployments,
       timestamp: new Date().toISOString(),
+      status: status,
+      payload: {
+        runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+        runId: github.context.job.toString(),
+        runNumber: github.context.runNumber,
+        repositoryName: github.context.repo.repo,
+        repositoryOwner: github.context.repo.owner,
+        actionUrl: githubActionUrl,
+        commitHash: github.context.sha,
+        branch: github.context?.ref?.replace('refs/heads/', ''),
+        author: github.context.actor,
+        message: summary,
+        deployments: deployments,
+      },
     }
 
     await axios.post(notificationEndpoint, payload)
