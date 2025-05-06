@@ -34,9 +34,13 @@ async function sendContractArtifactsToBackend(
       payload: {
         repositoryName: github.context.repo.repo,
         repositoryOwner: github.context.repo.owner,
+        runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+        runId: github.context.job.toString(),
+        runNumber: github.context.runNumber,
+        branch: github.context?.ref?.replace('refs/heads/', ''),
+        author: github.context.actor,
         actionUrl: githubActionUrl,
         commitHash: github.context.sha,
-        workflow: github.context.workflow,
         message:
           metadata.message ||
           `Contract artifacts uploaded at ${new Date().toISOString()}`,
