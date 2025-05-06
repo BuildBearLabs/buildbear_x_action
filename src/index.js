@@ -444,7 +444,7 @@ async function sendNotificationToBackend(deploymentData) {
     let deployments = []
 
     // Process deployment data if not "deployment started" or already "failed"
-    if (status !== 'deployment started' && status !== 'failed') {
+    if (status !== 'started' && status !== 'failed') {
       // Extract contract data
       deployments = extractContractData(deploymentData.deployments)
 
@@ -463,7 +463,7 @@ async function sendNotificationToBackend(deploymentData) {
       status: status,
       payload: {
         runAttempt: process.env.GITHUB_RUN_ATTEMPT,
-        runId: github.context.job.toString(),
+        runId: github.context.runId.toString(),
         runNumber: github.context.runNumber,
         repositoryName: github.context.repo.repo,
         repositoryOwner: github.context.repo.owner,
@@ -476,6 +476,8 @@ async function sendNotificationToBackend(deploymentData) {
       },
     }
 
+    console.log('Payload:', JSON.stringify(payload, null, 2))
+
     await axios.post(notificationEndpoint, payload)
 
     // If the status was changed to failed, we should fail the GitHub Action
@@ -483,6 +485,7 @@ async function sendNotificationToBackend(deploymentData) {
       core.setFailed(summary)
     }
   } catch (error) {
+    console.log(error)
     // Don't throw error to prevent action failure due to notification issues
   }
 }
@@ -516,7 +519,7 @@ const validateDeployment = (extractedData) => {
 ;(async () => {
   try {
     let deploymentNotificationData = {
-      status: 'deployment started',
+      status: 'started',
     }
     await sendNotificationToBackend(deploymentNotificationData)
     // Get the input values

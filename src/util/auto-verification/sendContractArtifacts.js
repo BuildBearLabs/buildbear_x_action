@@ -35,7 +35,7 @@ async function sendContractArtifactsToBackend(
         repositoryName: github.context.repo.repo,
         repositoryOwner: github.context.repo.owner,
         runAttempt: process.env.GITHUB_RUN_ATTEMPT,
-        runId: github.context.job.toString(),
+        runId: github.context.runId.toString(),
         runNumber: github.context.runNumber,
         branch: github.context?.ref?.replace('refs/heads/', ''),
         author: github.context.actor,
