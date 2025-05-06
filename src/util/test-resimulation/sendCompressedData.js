@@ -42,7 +42,7 @@ async function sendCompressedDataToBackend(compressedFilePath, metadata = {}) {
         actionUrl: githubActionUrl,
         commitHash: github.context.sha,
         runAttempt: process.env.GITHUB_RUN_ATTEMPT,
-        runId: github.context.job.toString(),
+        runId: github.context.runId.toString(),
         runNumber: github.context.runNumber,
         branch: github.context?.ref?.replace('refs/heads/', ''),
         author: github.context.actor,
