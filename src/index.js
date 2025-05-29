@@ -19,6 +19,8 @@ const {
   sendContractArtifactsToBackend,
 } = require('./util/auto-verification/sendContractArtifacts')
 const { findDirectory } = require('./util/pathOperations')
+const { getAllEnvironmentVariables } = require('./util/io/env')
+const { findVmReadFileCalls } = require('./util/io/artifacts')
 
 const API_KEY = core.getInput('buildbear-token', { required: true })
 
@@ -473,6 +475,7 @@ async function sendNotificationToBackend(deploymentData) {
         author: github.context.actor,
         message: summary,
         deployments: deployments,
+        config: deploymentData.config || {},
       },
     }
 
@@ -518,15 +521,12 @@ const validateDeployment = (extractedData) => {
 
 ;(async () => {
   try {
-    let deploymentNotificationData = {
-      status: 'started',
-    }
-    await sendNotificationToBackend(deploymentNotificationData)
-    // Get the input values
-    // Get the input values
     const networkInput = core.getInput('network', { required: false })
     const network = networkInput ? JSON.parse(networkInput) : []
     const deployCmd = core.getInput('deploy-command', { required: false })
+
+    const repoName = github.context.repo.repo // Get repository name
+    const commitHash = github.context.sha // Get commit hash
 
     const workingDir = path.join(
       process.cwd(),
@@ -534,8 +534,17 @@ const validateDeployment = (extractedData) => {
         required: false,
       })
     )
-    const repoName = github.context.repo.repo // Get repository name
-    const commitHash = github.context.sha // Get commit hash
+
+    const envs = getAllEnvironmentVariables()
+    const artifacts = findVmReadFileCalls(workingDir)
+
+    let deploymentNotificationData = {
+      status: 'started',
+      config: { envs: envs, artifacts: artifacts },
+    }
+    await sendNotificationToBackend(deploymentNotificationData)
+    // Get the input values
+    // Get the input values
 
     console.log('Network details:', network)
     console.log(`Deploy command: ${deployCmd}`)
