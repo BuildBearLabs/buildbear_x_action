@@ -9,6 +9,9 @@ const fs = require('fs').promises
 const axios = require('axios')
 const path = require('path')
 const github = require('@actions/github')
+const core = require('@actions/core')
+
+const API_KEY = core.getInput('buildbear-token', { required: true })
 
 /**
  * Sends the contract artifacts to the backend

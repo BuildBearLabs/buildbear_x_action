@@ -9,6 +9,7 @@ const fs = require('fs').promises
 const axios = require('axios')
 const path = require('path')
 const github = require('@actions/github')
+const core = require('@actions/core')
 
 /**
  * Sends the compressed bbout file to the backend
@@ -66,10 +67,7 @@ async function sendCompressedDataToBackend(compressedFilePath, metadata = {}) {
     // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
     const baseUrl = process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
 
-    const API_KEY = process.env.API_KEY
-    if (!API_KEY) {
-      throw new Error('API_KEY is not set in environment')
-    }
+    const API_KEY = core.getInput('buildbear-token', { required: true })
 
     // Send to backend
     const response = await axios.post(
