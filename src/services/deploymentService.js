@@ -133,15 +133,31 @@ class DeploymentService {
       throw new Error(`Sandbox failed to become ready: ${sandboxData.url}`)
     }
 
-    // Execute deployment
+    // Execute deployment and wait for completion (don't process artifacts yet)x
     logger.deployment(`Executing deployment for chainId ${chainId}`)
-    await this.executeDeployment(deployCommand, workingDirectory)
+    const exitCode = await this.executeDeployment(
+      deployCommand,
+      workingDirectory,
+      true
+    )
 
-    // Process deployment artifacts
+    // Add a small delay to ensure broadcast files are fully written
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Process deployment artifacts after deployment completes
     const deploymentData = await this.processBroadcastDirectory(
       chainId,
       workingDirectory
     )
+
+    // Now process artifacts (test resimulation and contract verification)
+    const status = exitCode === 0 ? 'success' : 'failed'
+    const message =
+      exitCode === 0
+        ? 'Deployment completed successfully'
+        : `Deployment failed with exit code ${exitCode}`
+
+    await this.processArtifacts(workingDirectory, status, message)
 
     return {
       chainId,
@@ -157,9 +173,14 @@ class DeploymentService {
    *
    * @param {string} deployCommand - Command to execute
    * @param {string} workingDirectory - Working directory
+   * @param {boolean} processArtifacts - Whether to process artifacts after deployment
    * @returns {Promise<number>} Exit code
    */
-  async executeDeployment(deployCommand, workingDirectory) {
+  async executeDeployment(
+    deployCommand,
+    workingDirectory,
+    processArtifacts = true
+  ) {
     let exitCode = 0
 
     if (!deployCommand) {
@@ -202,14 +223,16 @@ class DeploymentService {
       })
     })
 
-    // Process artifacts based on deployment result
-    const status = exitCode === 0 ? 'success' : 'failed'
-    const message =
-      exitCode === 0
-        ? 'Deployment completed successfully'
-        : `Deployment failed with exit code ${exitCode}`
+    // Process artifacts based on deployment result (only if requested)
+    if (processArtifacts) {
+      const status = exitCode === 0 ? 'success' : 'failed'
+      const message =
+        exitCode === 0
+          ? 'Deployment completed successfully'
+          : `Deployment failed with exit code ${exitCode}`
 
-    await this.processArtifacts(workingDirectory, status, message)
+      await this.processArtifacts(workingDirectory, status, message)
+    }
 
     return exitCode
   }
