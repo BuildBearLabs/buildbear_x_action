@@ -130,10 +130,6 @@ class IOUtils {
         excludeDirs,
         recursive,
       })
-
-      logger.success(
-        `Found ${Object.keys(results).length} vm.readFile references`
-      )
       return results
     } catch (error) {
       logger.error('Error searching for vm.readFile calls', { error })

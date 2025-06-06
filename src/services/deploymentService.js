@@ -45,40 +45,45 @@ class DeploymentService {
         logger.info(
           'No network configuration provided. Processing artifacts only.'
         )
-        if (workingDirectory && deployCommand) {
-          await this.executeDeployment(deployCommand, workingDirectory)
+        // Execute deployment if command provided, otherwise just process artifacts
+        if (workingDirectory) {
+          await this.processArtifacts(
+            workingDirectory,
+            'success',
+            'Processing artifacts only (no deployment command)'
+          )
         }
-        return allDeployments
       }
 
-      // Deploy to each network
-      for (const network of networks) {
-        logger.group(
-          `Processing network with chainId: ${network.chainId}`,
-          async () => {
-            try {
-              const deploymentResult = await this.deployToNetwork(
-                network,
-                deployCommand,
-                workingDirectory
-              )
+      if (deployCommand && workingDirectory) {
+        for (const network of networks) {
+          logger.group(
+            `Processing network with chainId: ${network.chainId}`,
+            async () => {
+              try {
+                const deploymentResult = await this.deployToNetwork(
+                  network,
+                  deployCommand,
+                  workingDirectory
+                )
 
-              if (deploymentResult) {
-                allDeployments.push(deploymentResult)
+                if (deploymentResult) {
+                  allDeployments.push(deploymentResult)
+                }
+              } catch (error) {
+                logger.error(
+                  `Failed to deploy to network ${network.chainId}`,
+                  error
+                )
+                allDeployments.push({
+                  chainId: network.chainId,
+                  status: 'failed',
+                  error: error.message,
+                })
               }
-            } catch (error) {
-              logger.error(
-                `Failed to deploy to network ${network.chainId}`,
-                error
-              )
-              allDeployments.push({
-                chainId: network.chainId,
-                status: 'failed',
-                error: error.message,
-              })
             }
-          }
-        )
+          )
+        }
       }
 
       // Send final notification
