@@ -307,15 +307,13 @@ class DeploymentService {
    * Process broadcast directory for deployment data
    */
   async processBroadcastDirectory(chainId, workingDirectory) {
-    // This method is imported from the original code
-    // Would need to be refactored to use the logger service
-    // For now, keeping the original implementation
-
-    // Import the original function temporarily
     const fs = require('fs').promises
 
     try {
-      const broadcastDir = await findDirectory('broadcast', workingDirectory)
+      const broadcastDir = await pathUtils.findDirectory(
+        'broadcast',
+        workingDirectory
+      )
       if (!broadcastDir) {
         logger.info(
           'No broadcast directory found - skipping deployment data processing'
@@ -323,10 +321,69 @@ class DeploymentService {
         return null
       }
 
-      // Implementation continues with original logic...
-      // This would be refactored to use the new architecture
+      logger.debug(`Processing broadcast directory: ${broadcastDir}`)
 
-      return {} // Placeholder
+      // Find all JSON files in the broadcast directory
+      const files = await fs.readdir(broadcastDir, { withFileTypes: true })
+      const jsonFiles = files
+        .filter((file) => file.isFile() && file.name.endsWith('.json'))
+        .map((file) => path.join(broadcastDir, file.name))
+
+      if (jsonFiles.length === 0) {
+        logger.info('No broadcast JSON files found')
+        return null
+      }
+
+      const deploymentData = {
+        chainId: parseInt(chainId),
+        transactions: [],
+        contracts: {},
+      }
+
+      // Process each JSON file
+      for (const jsonFile of jsonFiles) {
+        try {
+          const content = await fs.readFile(jsonFile, 'utf8')
+          const broadcastData = JSON.parse(content)
+
+          if (
+            broadcastData.transactions &&
+            Array.isArray(broadcastData.transactions)
+          ) {
+            for (const tx of broadcastData.transactions) {
+              if (tx.transactionType === 'CREATE' && tx.contractAddress) {
+                // Track contract deployments
+                deploymentData.contracts[tx.contractName || 'Unknown'] = {
+                  address: tx.contractAddress,
+                  transactionHash: tx.hash,
+                  gasUsed: tx.receipt?.gasUsed,
+                  blockNumber: tx.receipt?.blockNumber,
+                }
+              }
+
+              // Track all transactions
+              deploymentData.transactions.push({
+                hash: tx.hash,
+                type: tx.transactionType,
+                contractName: tx.contractName,
+                contractAddress: tx.contractAddress,
+                gasUsed: tx.receipt?.gasUsed,
+                status: tx.receipt?.status,
+              })
+            }
+          }
+        } catch (parseError) {
+          logger.warn(
+            `Failed to parse broadcast file ${jsonFile}: ${parseError.message}`
+          )
+        }
+      }
+
+      logger.info(
+        `Processed ${deploymentData.transactions.length} transactions and ${Object.keys(deploymentData.contracts).length} contract deployments`
+      )
+
+      return deploymentData
     } catch (error) {
       logger.error('Error processing broadcast directory:', error)
       throw error
