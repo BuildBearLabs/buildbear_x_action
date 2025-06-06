@@ -264,13 +264,9 @@ class BuildBearApiService {
         },
       }
 
-      // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
-      const baseUrl =
-        process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
-
       // Send to backend
       const url = `/ci/webhook/${this.apiToken}`
-      const response = await this.client.post(url, payload)
+      const response = await this.client.post(url, webhookPayload)
 
       logger.success('Test artifacts uploaded successfully')
       return {
@@ -324,7 +320,7 @@ class BuildBearApiService {
       }
 
       const url = `/ci/webhook/${this.apiToken}`
-      const response = await this.client.post(url, payload)
+      const response = await this.client.post(url, webhookPayload)
 
       logger.success('Contract verification artifacts uploaded successfully')
       return {
