@@ -1,29 +1,30 @@
-name: "bb_ci"
-description: "automate smart contract deployments across multiple networks using BuildBear’s sandbox"
+name: "BuildBear Smart Contract Deployment"
+description: "🚀 Automate smart contract deployments across multiple networks using BuildBear's sandbox infrastructure with test resimulation and auto-verification"
+author: "BuildBear Labs"
 
 inputs:
   network:
-    description: "List of networks you want to deploy on"
+    description: "JSON array of networks to deploy on. Each network should contain 'chainId' and optionally 'blockNumber'. Example: [{'chainId': 1, 'blockNumber': 18000000}]"
     required: false
   deploy-command:
-    description: "Command to deploy the contract"
+    description: "Command to deploy your smart contracts (e.g., 'forge script DeployScript --broadcast' or 'make deploy')"
     required: false
   buildbear-token:
-    description: "Buildbear API token"
+    description: "Your BuildBear API token. Store this securely in GitHub Secrets as 'BUILDBEAR_TOKEN' and reference it as '${{ secrets.BUILDBEAR_TOKEN }}'"
     required: true
   working-directory:
-    description: "Project directory"
+    description: "Path to your project's root directory containing smart contracts and deployment scripts"
     required: false
     default: "."
 
 outputs:
   deployments:
-    description: "deployments logs"
+    description: "Detailed logs and metadata from all contract deployments including transaction hashes, contract addresses, and gas usage"
 
 runs:
   using: "node20"
   main: "./dist/index.js"
 
 branding:
-  icon: "bold"
-  color: "green"
+  icon: "layers"
+  color: "blue"
