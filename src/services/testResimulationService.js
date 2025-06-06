@@ -241,23 +241,14 @@ class TestResimulationService {
         )
       }
 
-      // This would integrate with BuildBear API service
-      // For now, simulate the upload
-      logger.info(
-        `Preparing to upload ${this.formatBytes(stats.size)} of test artifacts`
+      logger.info(`Uploading ${this.formatBytes(stats.size)} of test artifacts`)
+
+      // Use BuildBear API service to upload artifacts
+      const { buildBearApi } = require('./buildBearApi')
+      const response = await buildBearApi.uploadTestArtifacts(
+        compressedFilePath,
+        metadata
       )
-
-      // Simulate upload delay
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      const response = {
-        success: true,
-        uploadId: `upload_${Date.now()}`,
-        fileSize: stats.size,
-        fileSizeFormatted: this.formatBytes(stats.size),
-        metadata,
-        uploadedAt: new Date().toISOString(),
-      }
 
       logger.success('Test artifacts uploaded successfully')
       return response

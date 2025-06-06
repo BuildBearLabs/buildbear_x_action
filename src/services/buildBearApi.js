@@ -223,14 +223,68 @@ class BuildBearApiService {
     try {
       logger.progress('Uploading test artifacts to BuildBear')
 
-      // Implementation would depend on BuildBear's artifact upload API
-      // This is a placeholder for the actual implementation
+      const fs = require('fs')
+      const path = require('path')
+
+      // Read and encode file as base64
+      const fileBuffer = await fs.promises.readFile(filePath)
+      const base64File = fileBuffer.toString('base64')
+
+      const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
+
+      // Prepare the webhook payload according to the WebhookRequest interface
+      const webhookPayload = {
+        status: metadata.status || 'success', // Use "success" or "failed"
+        task: 'simulate_test',
+        timestamp: new Date().toISOString(),
+        payload: {
+          runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+          runId: github.context.runId.toString(),
+          runNumber: github.context.runNumber,
+          repositoryName: github.context.repo.repo,
+          repositoryOwner: github.context.repo.owner,
+          actionUrl: githubActionUrl,
+          commitHash: github.context.sha,
+          branch: github.context?.ref?.replace('refs/heads/', ''),
+          author: github.context.actor,
+          message:
+            metadata.message ||
+            `Test artifacts uploaded at ${new Date().toISOString()}`,
+          testsArtifacts: {
+            filename: path.basename(filePath),
+            contentType: 'application/gzip',
+            data: base64File,
+            metadata: {
+              originalSize: metadata.originalSize || 0,
+              compressedSize: metadata.compressedSize || fileBuffer.length,
+              fileCount: metadata.fileCount || 0,
+              timestamp: metadata.timestamp || new Date().toISOString(),
+            },
+          },
+        },
+      }
+
+      // Use BUILDBEAR_BASE_URL if it exists, otherwise use the hard-coded URL
+      const baseUrl =
+        process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io'
+
+      // Send to backend
+      const url = `/ci/webhook/${this.apiToken}`
+      const response = await this.client.post(url, payload)
 
       logger.success('Test artifacts uploaded successfully')
-      return { success: true }
+      return {
+        success: true,
+        uploadId: response.data.uploadId || `upload_${Date.now()}`,
+        message:
+          response.data.message || 'Test artifacts uploaded successfully',
+        metadata,
+      }
     } catch (error) {
       logger.error('Failed to upload test artifacts', error)
-      throw error
+      throw new Error(
+        `Test artifact upload failed: ${error.response?.data?.message || error.message}`
+      )
     }
   }
 
@@ -245,14 +299,47 @@ class BuildBearApiService {
     try {
       logger.progress('Uploading contract verification artifacts to BuildBear')
 
-      // Implementation would depend on BuildBear's verification API
-      // This is a placeholder for the actual implementation
+      const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
+
+      // Prepare the webhook payload according to the WebhookRequest interface
+      const webhookPayload = {
+        status: metadata.status || 'success', // Use "success" or "failed"
+        task: 'auto_verification',
+        timestamp: new Date().toISOString(),
+        payload: {
+          runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+          runId: github.context.runId.toString(),
+          runNumber: github.context.runNumber,
+          repositoryName: github.context.repo.repo,
+          repositoryOwner: github.context.repo.owner,
+          actionUrl: githubActionUrl,
+          commitHash: github.context.sha,
+          branch: github.context?.ref?.replace('refs/heads/', ''),
+          author: github.context.actor,
+          message:
+            metadata.message ||
+            `Contract artifacts uploaded at ${new Date().toISOString()}`,
+          artifacts: artifacts,
+        },
+      }
+
+      const url = `/ci/webhook/${this.apiToken}`
+      const response = await this.client.post(url, payload)
 
       logger.success('Contract verification artifacts uploaded successfully')
-      return { success: true }
+      return {
+        success: true,
+        artifactCount: Object.keys(artifacts).length,
+        message:
+          response.data.message ||
+          'Contract verification artifacts uploaded successfully',
+        metadata,
+      }
     } catch (error) {
       logger.error('Failed to upload verification artifacts', error)
-      throw error
+      throw new Error(
+        `Verification artifact upload failed: ${error.response?.data?.message || error.message}`
+      )
     }
   }
 }

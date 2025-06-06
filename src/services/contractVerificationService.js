@@ -347,18 +347,18 @@ class ContractVerificationService {
         return { success: false, message: 'No artifacts provided' }
       }
 
-      // This would integrate with BuildBear API service
-      // For now, return a mock response
-      logger.success(
-        `Successfully prepared ${Object.keys(artifacts).length} artifacts for verification`
+      // Use BuildBear API service to upload verification artifacts
+      const { buildBearApi } = require('./buildBearApi')
+      const response = await buildBearApi.uploadVerificationArtifacts(
+        artifacts,
+        metadata
       )
 
-      return {
-        success: true,
-        artifactCount: Object.keys(artifacts).length,
-        message: 'Artifacts processed successfully',
-        metadata,
-      }
+      logger.success(
+        `Successfully uploaded ${Object.keys(artifacts).length} artifacts for verification`
+      )
+
+      return response
     } catch (error) {
       logger.error('Failed to send artifacts to backend', { error })
       throw new Error(`Backend submission failed: ${error.message}`)
