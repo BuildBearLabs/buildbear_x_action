@@ -30,6 +30,15 @@ class DeploymentService {
    * @param {string} params.workingDirectory - Working directory path
    * @returns {Promise<Array>} Array of deployment results
    */
+  /**
+   * Execute the complete deployment pipeline
+   *
+   * @param {Object} params - Deployment parameters
+   * @param {Array} params.networks - Array of network configurations
+   * @param {string} [params.deployCommand] - Optional deployment command
+   * @param {string} params.workingDirectory - Working directory path
+   * @returns {Promise<Array>} Array of deployment results
+   */
   async executeDeploymentPipeline({
     networks,
     deployCommand,
@@ -41,6 +50,7 @@ class DeploymentService {
       // Send initial notification
       await this.sendDeploymentStartedNotification(workingDirectory)
 
+      // Handle case where no networks are provided
       if (!networks || networks.length === 0) {
         logger.info(
           'No network configuration provided. Processing artifacts only.'
@@ -53,8 +63,13 @@ class DeploymentService {
             'Processing artifacts only (no deployment command)'
           )
         }
+
+        // Send completion notification for artifacts-only processing
+        await this.sendDeploymentCompletedNotification(allDeployments)
+        return allDeployments
       }
 
+      // Process deployments for each network
       if (deployCommand && workingDirectory) {
         for (const network of networks) {
           logger.group(
@@ -69,6 +84,9 @@ class DeploymentService {
 
                 if (deploymentResult) {
                   allDeployments.push(deploymentResult)
+                  logger.info(
+                    `Successfully processed deployment for chainId: ${network.chainId}`
+                  )
                 }
               } catch (error) {
                 logger.error(
@@ -84,12 +102,27 @@ class DeploymentService {
             }
           )
         }
+      } else {
+        logger.info(
+          'No deployment command provided. Processing artifacts only.'
+        )
+        if (workingDirectory) {
+          await this.processArtifacts(
+            workingDirectory,
+            'success',
+            'Processing artifacts only (no deployment command)'
+          )
+        }
       }
 
-      // Send final notification
+      // Send final notification AFTER all deployments are complete
+      logger.info(
+        `Sending completion notification for ${allDeployments.length} deployments`
+      )
       await this.sendDeploymentCompletedNotification(allDeployments)
 
-      console.log(allDeployments)
+      // Log final results
+      console.log('Final deployment results:', allDeployments)
       return allDeployments
     } catch (error) {
       logger.error('Deployment pipeline failed', error)
@@ -97,7 +130,6 @@ class DeploymentService {
       throw error
     }
   }
-
   /**
    * Deploy to a specific network
    *
