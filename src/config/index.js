@@ -134,11 +134,11 @@ const validateConfig = () => {
  * Get BuildBear API token with validation
  */
 const getApiToken = () => {
-  const token = core.getInput('buildbear-token', { required: true })
+  const token = core.getInput('buildbear-api-key', { required: true })
 
   if (!token || token.trim() === '') {
     throw new Error(
-      '❌ BuildBear API token is required but not provided. Please add your token to GitHub Secrets as BUILDBEAR_TOKEN and reference it in your workflow.'
+      '❌ BuildBear API token is required but not provided. Please add your token to GitHub Secrets as BUILDBEAR_API_KEY and reference it in your workflow.'
     )
   }
 

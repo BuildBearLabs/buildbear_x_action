@@ -9,8 +9,8 @@ inputs:
   deploy-command:
     description: "Command to deploy your smart contracts (e.g., 'forge script DeployScript --broadcast' or 'make deploy')"
     required: false
-  buildbear-token:
-    description: "Your BuildBear API token. Store this securely in GitHub Secrets as 'BUILDBEAR_TOKEN'"
+  buildbear-api-key:
+    description: "Your BuildBear API token. Store this securely in GitHub Secrets as 'BUILDBEAR_API_KEY'"
     required: true
   working-directory:
     description: "Path to your project's root directory containing smart contracts and deployment scripts"
