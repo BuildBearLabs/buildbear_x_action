@@ -339,6 +339,7 @@ class DeploymentService {
    */
   async processBroadcastDirectory(chainId, workingDirectory) {
     const fs = require('fs').promises
+    const path = require('path')
 
     try {
       const broadcastDir = await pathUtils.findDirectory(
@@ -354,14 +355,85 @@ class DeploymentService {
 
       logger.debug(`Processing broadcast directory: ${broadcastDir}`)
 
-      // Find all JSON files in the broadcast directory
+      // Find all files in the broadcast directory with detailed logging
       const files = await fs.readdir(broadcastDir, { withFileTypes: true })
-      const jsonFiles = files
-        .filter((file) => file.isFile() && file.name.endsWith('.json'))
+
+      // Debug: Log all files found
+      logger.debug(`Found ${files.length} items in broadcast directory:`)
+      for (const file of files) {
+        logger.debug(
+          `  - ${file.name} (${file.isFile() ? 'file' : 'directory'})`
+        )
+      }
+
+      // Filter for JSON files with more detailed logging
+      const allFiles = files.filter((file) => file.isFile())
+      logger.debug(`Found ${allFiles.length} files (excluding directories)`)
+
+      const jsonFiles = allFiles
+        .filter((file) => file.name.endsWith('.json'))
         .map((file) => path.join(broadcastDir, file.name))
+
+      logger.debug(`Found ${jsonFiles.length} JSON files:`)
+      jsonFiles.forEach((jsonFile) => {
+        logger.debug(`  - ${jsonFile}`)
+      })
+
+      // If no JSON files, let's check if there are subdirectories that might contain JSON files
+      const subdirectories = files.filter((file) => file.isDirectory())
+      if (subdirectories.length > 0) {
+        logger.debug(
+          `Found ${subdirectories.length} subdirectories in broadcast:`
+        )
+        for (const subdir of subdirectories) {
+          logger.debug(`  - ${subdir.name}`)
+
+          // Check contents of subdirectories
+          try {
+            const subdirPath = path.join(broadcastDir, subdir.name)
+            const subdirFiles = await fs.readdir(subdirPath, {
+              withFileTypes: true,
+            })
+            logger.debug(
+              `    Subdirectory ${subdir.name} contains ${subdirFiles.length} items:`
+            )
+            for (const subdirFile of subdirFiles) {
+              logger.debug(
+                `      - ${subdirFile.name} (${subdirFile.isFile() ? 'file' : 'directory'})`
+              )
+              if (subdirFile.isFile() && subdirFile.name.endsWith('.json')) {
+                const jsonPath = path.join(subdirPath, subdirFile.name)
+                jsonFiles.push(jsonPath)
+                logger.debug(
+                  `    Added JSON file from subdirectory: ${jsonPath}`
+                )
+              }
+            }
+          } catch (subdirError) {
+            logger.warn(
+              `Failed to read subdirectory ${subdir.name}: ${subdirError.message}`
+            )
+          }
+        }
+
+        if (jsonFiles.length > 0) {
+          logger.debug(
+            `Total JSON files found (including subdirectories): ${jsonFiles.length}`
+          )
+        }
+      }
 
       if (jsonFiles.length === 0) {
         logger.info('No broadcast JSON files found')
+        // Additional debug: show what file extensions we do have
+        const fileExtensions = allFiles.map((file) => {
+          const ext = path.extname(file.name)
+          return ext || '(no extension)'
+        })
+        const uniqueExtensions = [...new Set(fileExtensions)]
+        logger.debug(
+          `File extensions found in broadcast directory: ${uniqueExtensions.join(', ')}`
+        )
         return null
       }
 
@@ -374,14 +446,42 @@ class DeploymentService {
       // Process each JSON file
       for (const jsonFile of jsonFiles) {
         try {
+          logger.debug(`Processing JSON file: ${jsonFile}`)
           const content = await fs.readFile(jsonFile, 'utf8')
+
+          // Debug: Log file size and first few characters
+          logger.debug(`File size: ${content.length} bytes`)
+          logger.debug(
+            `File preview: ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`
+          )
+
           const broadcastData = JSON.parse(content)
+
+          // Debug: Log the structure of the parsed data
+          logger.debug(`Parsed JSON structure:`, {
+            hasTransactions: !!broadcastData.transactions,
+            transactionsType: Array.isArray(broadcastData.transactions)
+              ? 'array'
+              : typeof broadcastData.transactions,
+            transactionsLength: Array.isArray(broadcastData.transactions)
+              ? broadcastData.transactions.length
+              : 'N/A',
+            topLevelKeys: Object.keys(broadcastData),
+          })
 
           if (
             broadcastData.transactions &&
             Array.isArray(broadcastData.transactions)
           ) {
+            logger.debug(
+              `Processing ${broadcastData.transactions.length} transactions from ${jsonFile}`
+            )
+
             for (const tx of broadcastData.transactions) {
+              logger.debug(
+                `Transaction: ${tx.transactionType || 'UNKNOWN_TYPE'} - ${tx.contractName || 'UNKNOWN_CONTRACT'}`
+              )
+
               if (tx.transactionType === 'CREATE' && tx.contractAddress) {
                 // Track contract deployments
                 deploymentData.contracts[tx.contractName || 'Unknown'] = {
@@ -390,6 +490,9 @@ class DeploymentService {
                   gasUsed: tx.receipt?.gasUsed,
                   blockNumber: tx.receipt?.blockNumber,
                 }
+                logger.debug(
+                  `Tracked contract deployment: ${tx.contractName} at ${tx.contractAddress}`
+                )
               }
 
               // Track all transactions
@@ -402,11 +505,24 @@ class DeploymentService {
                 status: tx.receipt?.status,
               })
             }
+          } else {
+            logger.debug(`No valid transactions array found in ${jsonFile}`)
           }
         } catch (parseError) {
           logger.warn(
             `Failed to parse broadcast file ${jsonFile}: ${parseError.message}`
           )
+          // Debug: Log the problematic content
+          try {
+            const content = await fs.readFile(jsonFile, 'utf8')
+            logger.debug(
+              `Problematic file content preview: ${content.substring(0, 500)}`
+            )
+          } catch (readError) {
+            logger.debug(
+              `Could not read file for debugging: ${readError.message}`
+            )
+          }
         }
       }
 
