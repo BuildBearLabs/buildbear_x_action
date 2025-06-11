@@ -89,6 +89,7 @@ class DeploymentService {
       // Send final notification
       await this.sendDeploymentCompletedNotification(allDeployments)
 
+      console.log(allDeployments)
       return allDeployments
     } catch (error) {
       logger.error('Deployment pipeline failed', error)
@@ -149,6 +150,8 @@ class DeploymentService {
       chainId,
       workingDirectory
     )
+
+    console.log('Deployment data:', deploymentData)
 
     // Now process artifacts (test resimulation and contract verification)
     const status = exitCode === 0 ? 'success' : 'failed'
