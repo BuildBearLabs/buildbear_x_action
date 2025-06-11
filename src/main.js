@@ -92,36 +92,53 @@ function printDeploymentSummary(deployments) {
     console.log(`\nChain ID: ${deployment.chainId}`)
 
     if (deployment.status === 'failed') {
-      logger.error(`Status: Failed - ${deployment.error}`)
+      logger.error(`Status: Failed - ${deployment.error || 'Unknown error'}`)
       return
     }
 
+    console.log(`Status: ${deployment.status}`)
     console.log(`Sandbox ID: ${deployment.sandboxId}`)
     console.log(`RPC URL: ${deployment.rpcUrl}`)
-    console.log('\nDeployed Contracts:')
 
-    if (deployment.deployments && deployment.deployments.receipts) {
-      deployment.deployments.receipts
-        .filter((receipt) => receipt.contractAddress)
-        .forEach((receipt, idx) => {
-          const transaction = deployment.deployments.transactions.find(
-            (tx) =>
-              tx.contractAddress?.toLowerCase() ===
-              receipt.contractAddress?.toLowerCase()
-          )
-          const contractName = transaction
-            ? transaction.contractName
-            : 'Unknown Contract'
+    // Handle the correct deployment data structure
+    if (deployment.deployments && deployment.deployments.contracts) {
+      const contracts = deployment.deployments.contracts
+      const contractEntries = Object.entries(contracts)
 
-          console.log(
-            `\n${idx + 1}. ${contractName}: ${receipt.contractAddress || 'N/A'}`
-          )
-          console.log(`   Transaction Hash: ${receipt.transactionHash}`)
-          console.log(`   Block Number: ${receipt.blockNumber}`)
-          console.log(`   Gas Used: ${receipt.gasUsed}`)
-          console.log(`   Cumulative Gas Used: ${receipt.cumulativeGasUsed}`)
-          console.log(`   Effective Gas Price: ${receipt.effectiveGasPrice}`)
+      if (contractEntries.length > 0) {
+        console.log('\nDeployed Contracts:')
+
+        contractEntries.forEach(([contractName, contractInfo], idx) => {
+          console.log(`\n${idx + 1}. ${contractName}: ${contractInfo.address}`)
+          console.log(`   Transaction Hash: ${contractInfo.transactionHash}`)
+
+          if (contractInfo.blockNumber) {
+            console.log(`   Block Number: ${contractInfo.blockNumber}`)
+          }
+
+          if (contractInfo.gasUsed) {
+            console.log(`   Gas Used: ${contractInfo.gasUsed}`)
+          }
         })
+
+        // Show additional transaction summary if available
+        const transactions = deployment.deployments.transactions || []
+        const createTransactions = transactions.filter(
+          (tx) => tx.type === 'CREATE'
+        )
+
+        if (createTransactions.length > 0) {
+          console.log(`\nDeployment Summary:`)
+          console.log(
+            `   Total Contract Deployments: ${createTransactions.length}`
+          )
+          console.log(`   Total Transactions: ${transactions.length}`)
+        }
+      } else {
+        console.log('\nNo contracts deployed')
+      }
+    } else {
+      console.log('\nNo deployment data available')
     }
 
     if (index < deployments.length - 1) {
