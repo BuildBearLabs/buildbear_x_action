@@ -357,9 +357,6 @@ class DeploymentService {
   /**
    * Process broadcast directory for deployment data
    */
-  /**
-   * Process broadcast directory for deployment data
-   */
   async processBroadcastDirectory(chainId, workingDirectory) {
     const fs = require('fs').promises
     const path = require('path')
@@ -393,18 +390,35 @@ class DeploymentService {
       const allFiles = files.filter((file) => file.isFile())
       logger.debug(`Found ${allFiles.length} files (excluding directories)`)
 
-      const jsonFiles = allFiles
+      const jsonFiles = []
+
+      // First, look for direct JSON files (prioritize run-latest.json)
+      const directJsonFiles = allFiles
         .filter((file) => file.name.endsWith('.json'))
         .map((file) => path.join(broadcastDir, file.name))
 
-      logger.debug(`Found ${jsonFiles.length} JSON files:`)
-      jsonFiles.forEach((jsonFile) => {
-        logger.debug(`  - ${jsonFile}`)
-      })
+      // Add run-latest.json files first, skip others if run-latest exists
+      const hasRunLatest = directJsonFiles.some((file) =>
+        file.endsWith('run-latest.json')
+      )
+      if (hasRunLatest) {
+        directJsonFiles
+          .filter((file) => file.endsWith('run-latest.json'))
+          .forEach((file) => {
+            jsonFiles.push(file)
+            logger.debug(`  - Found run-latest.json: ${file}`)
+          })
+      } else {
+        // If no run-latest.json, add other JSON files
+        directJsonFiles.forEach((file) => {
+          jsonFiles.push(file)
+          logger.debug(`  - Found JSON file: ${file}`)
+        })
+      }
 
-      // If no JSON files, let's check if there are subdirectories that might contain JSON files
+      // If no JSON files at root level, check subdirectories
       const subdirectories = files.filter((file) => file.isDirectory())
-      if (subdirectories.length > 0) {
+      if (jsonFiles.length === 0 && subdirectories.length > 0) {
         logger.debug(
           `Found ${subdirectories.length} subdirectories in broadcast:`
         )
@@ -489,27 +503,41 @@ class DeploymentService {
               )
 
               if (tx.transactionType === 'CREATE' && tx.contractAddress) {
-                // Track contract deployments
-                deploymentData.contracts[tx.contractName || 'Unknown'] = {
-                  address: tx.contractAddress,
-                  transactionHash: tx.hash,
-                  gasUsed: tx.receipt?.gasUsed,
-                  blockNumber: tx.receipt?.blockNumber,
+                // Track contract deployments (avoid duplicates by checking if already exists)
+                if (!deploymentData.contracts[tx.contractName || 'Unknown']) {
+                  deploymentData.contracts[tx.contractName || 'Unknown'] = {
+                    address: tx.contractAddress,
+                    transactionHash: tx.hash,
+                    gasUsed: tx.receipt?.gasUsed,
+                    blockNumber: tx.receipt?.blockNumber,
+                  }
+                  logger.debug(
+                    `Tracked contract deployment: ${tx.contractName} at ${tx.contractAddress}`
+                  )
+                } else {
+                  logger.debug(
+                    `Skipping duplicate contract: ${tx.contractName} at ${tx.contractAddress}`
+                  )
                 }
-                logger.debug(
-                  `Tracked contract deployment: ${tx.contractName} at ${tx.contractAddress}`
-                )
               }
 
-              // Track all transactions
-              deploymentData.transactions.push({
-                hash: tx.hash,
-                type: tx.transactionType,
-                contractName: tx.contractName,
-                contractAddress: tx.contractAddress,
-                gasUsed: tx.receipt?.gasUsed,
-                status: tx.receipt?.status,
-              })
+              // Track all transactions (avoid duplicates by checking hash)
+              const existingTx = deploymentData.transactions.find(
+                (existingTransaction) => existingTransaction.hash === tx.hash
+              )
+
+              if (!existingTx) {
+                deploymentData.transactions.push({
+                  hash: tx.hash,
+                  type: tx.transactionType,
+                  contractName: tx.contractName,
+                  contractAddress: tx.contractAddress,
+                  gasUsed: tx.receipt?.gasUsed,
+                  status: tx.receipt?.status,
+                })
+              } else {
+                logger.debug(`Skipping duplicate transaction: ${tx.hash}`)
+              }
             }
           } else {
             logger.debug(`No valid transactions array found in ${jsonFile}`)
@@ -545,6 +573,7 @@ class DeploymentService {
 
   /**
    * Helper method to recursively search for JSON files in broadcast structure
+   * Modified to prioritize run-latest.json and avoid duplicates
    */
   async searchForJsonFiles(dirPath, jsonFiles, depth = 0) {
     const fs = require('fs').promises
@@ -561,6 +590,10 @@ class DeploymentService {
       logger.debug(`${'  '.repeat(depth)}Searching in: ${dirPath}`)
       logger.debug(`${'  '.repeat(depth)}Found ${files.length} items:`)
 
+      // First pass: look for run-latest.json
+      const runLatestFiles = []
+      const otherJsonFiles = []
+
       for (const file of files) {
         logger.debug(
           `${'  '.repeat(depth)}  - ${file.name} (${file.isFile() ? 'file' : 'directory'})`
@@ -569,24 +602,37 @@ class DeploymentService {
         if (file.isFile() && file.name.endsWith('.json')) {
           const jsonPath = path.join(dirPath, file.name)
 
-          // Prioritize run-latest.json files
           if (file.name === 'run-latest.json') {
+            runLatestFiles.push(jsonPath)
             logger.debug(
               `${'  '.repeat(depth)}  ✓ Found run-latest.json: ${jsonPath}`
             )
-            // Add run-latest.json to the beginning of the array for priority processing
-            jsonFiles.unshift(jsonPath)
           } else {
+            otherJsonFiles.push(jsonPath)
             logger.debug(
               `${'  '.repeat(depth)}  ✓ Found JSON file: ${jsonPath}`
             )
-            jsonFiles.push(jsonPath)
           }
         } else if (file.isDirectory()) {
           // Recursively search subdirectories
           const subdirPath = path.join(dirPath, file.name)
           await this.searchForJsonFiles(subdirPath, jsonFiles, depth + 1)
         }
+      }
+
+      // Prioritize run-latest.json files, only add others if no run-latest exists
+      if (runLatestFiles.length > 0) {
+        runLatestFiles.forEach((file) => {
+          jsonFiles.unshift(file) // Add to beginning for priority
+          logger.debug(
+            `${'  '.repeat(depth)}  → Added run-latest.json: ${file}`
+          )
+        })
+      } else if (otherJsonFiles.length > 0) {
+        otherJsonFiles.forEach((file) => {
+          jsonFiles.push(file)
+          logger.debug(`${'  '.repeat(depth)}  → Added JSON file: ${file}`)
+        })
       }
     } catch (error) {
       logger.warn(`Failed to read directory ${dirPath}: ${error.message}`)
