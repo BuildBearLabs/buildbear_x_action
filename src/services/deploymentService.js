@@ -337,6 +337,9 @@ class DeploymentService {
   /**
    * Process broadcast directory for deployment data
    */
+  /**
+   * Process broadcast directory for deployment data
+   */
   async processBroadcastDirectory(chainId, workingDirectory) {
     const fs = require('fs').promises
     const path = require('path')
@@ -388,27 +391,10 @@ class DeploymentService {
         for (const subdir of subdirectories) {
           logger.debug(`  - ${subdir.name}`)
 
-          // Check contents of subdirectories
+          // Check contents of subdirectories (recursively for Forge structure)
           try {
             const subdirPath = path.join(broadcastDir, subdir.name)
-            const subdirFiles = await fs.readdir(subdirPath, {
-              withFileTypes: true,
-            })
-            logger.debug(
-              `    Subdirectory ${subdir.name} contains ${subdirFiles.length} items:`
-            )
-            for (const subdirFile of subdirFiles) {
-              logger.debug(
-                `      - ${subdirFile.name} (${subdirFile.isFile() ? 'file' : 'directory'})`
-              )
-              if (subdirFile.isFile() && subdirFile.name.endsWith('.json')) {
-                const jsonPath = path.join(subdirPath, subdirFile.name)
-                jsonFiles.push(jsonPath)
-                logger.debug(
-                  `    Added JSON file from subdirectory: ${jsonPath}`
-                )
-              }
-            }
+            await this.searchForJsonFiles(subdirPath, jsonFiles, 0)
           } catch (subdirError) {
             logger.warn(
               `Failed to read subdirectory ${subdir.name}: ${subdirError.message}`
@@ -534,6 +520,56 @@ class DeploymentService {
     } catch (error) {
       logger.error('Error processing broadcast directory:', error)
       throw error
+    }
+  }
+
+  /**
+   * Helper method to recursively search for JSON files in broadcast structure
+   */
+  async searchForJsonFiles(dirPath, jsonFiles, depth = 0) {
+    const fs = require('fs').promises
+    const path = require('path')
+
+    if (depth > 3) {
+      // Prevent infinite recursion
+      logger.warn(`Maximum search depth reached for ${dirPath}`)
+      return
+    }
+
+    try {
+      const files = await fs.readdir(dirPath, { withFileTypes: true })
+      logger.debug(`${'  '.repeat(depth)}Searching in: ${dirPath}`)
+      logger.debug(`${'  '.repeat(depth)}Found ${files.length} items:`)
+
+      for (const file of files) {
+        logger.debug(
+          `${'  '.repeat(depth)}  - ${file.name} (${file.isFile() ? 'file' : 'directory'})`
+        )
+
+        if (file.isFile() && file.name.endsWith('.json')) {
+          const jsonPath = path.join(dirPath, file.name)
+
+          // Prioritize run-latest.json files
+          if (file.name === 'run-latest.json') {
+            logger.debug(
+              `${'  '.repeat(depth)}  ✓ Found run-latest.json: ${jsonPath}`
+            )
+            // Add run-latest.json to the beginning of the array for priority processing
+            jsonFiles.unshift(jsonPath)
+          } else {
+            logger.debug(
+              `${'  '.repeat(depth)}  ✓ Found JSON file: ${jsonPath}`
+            )
+            jsonFiles.push(jsonPath)
+          }
+        } else if (file.isDirectory()) {
+          // Recursively search subdirectories
+          const subdirPath = path.join(dirPath, file.name)
+          await this.searchForJsonFiles(subdirPath, jsonFiles, depth + 1)
+        }
+      }
+    } catch (error) {
+      logger.warn(`Failed to read directory ${dirPath}: ${error.message}`)
     }
   }
 
