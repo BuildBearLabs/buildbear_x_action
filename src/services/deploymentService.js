@@ -30,15 +30,6 @@ class DeploymentService {
    * @param {string} params.workingDirectory - Working directory path
    * @returns {Promise<Array>} Array of deployment results
    */
-  /**
-   * Execute the complete deployment pipeline
-   *
-   * @param {Object} params - Deployment parameters
-   * @param {Array} params.networks - Array of network configurations
-   * @param {string} [params.deployCommand] - Optional deployment command
-   * @param {string} params.workingDirectory - Working directory path
-   * @returns {Promise<Array>} Array of deployment results
-   */
   async executeDeploymentPipeline({
     networks,
     deployCommand,
@@ -72,35 +63,32 @@ class DeploymentService {
       // Process deployments for each network
       if (deployCommand && workingDirectory) {
         for (const network of networks) {
-          logger.group(
-            `Processing network with chainId: ${network.chainId}`,
-            async () => {
-              try {
-                const deploymentResult = await this.deployToNetwork(
-                  network,
-                  deployCommand,
-                  workingDirectory
-                )
+          logger.info(`Processing network with chainId: ${network.chainId}`)
 
-                if (deploymentResult) {
-                  allDeployments.push(deploymentResult)
-                  logger.info(
-                    `Successfully processed deployment for chainId: ${network.chainId}`
-                  )
-                }
-              } catch (error) {
-                logger.error(
-                  `Failed to deploy to network ${network.chainId}`,
-                  error
-                )
-                allDeployments.push({
-                  chainId: network.chainId,
-                  status: 'failed',
-                  error: error.message,
-                })
-              }
+          try {
+            const deploymentResult = await this.deployToNetwork(
+              network,
+              deployCommand,
+              workingDirectory
+            )
+
+            if (deploymentResult) {
+              allDeployments.push(deploymentResult)
+              logger.info(
+                `Successfully processed deployment for chainId: ${network.chainId}`
+              )
             }
-          )
+          } catch (error) {
+            logger.error(
+              `Failed to deploy to network ${network.chainId}`,
+              error
+            )
+            allDeployments.push({
+              chainId: network.chainId,
+              status: 'failed',
+              error: error.message,
+            })
+          }
         }
       } else {
         logger.info(
