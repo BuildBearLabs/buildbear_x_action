@@ -1,4 +1,4 @@
-name: "BuildBear Smart Contract Deployment"
+name: "BuildBear CI/CD"
 description: "🚀 Automate smart contract deployments across multiple networks using BuildBear's sandbox infrastructure with forge testcases"
 author: "BuildBear Labs"
 
