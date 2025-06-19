@@ -1,3 +1,10 @@
+## [1.7.1](https://github.com/BuildBearLabs/buildbear_x_action/compare/v1.7.0...v1.7.1) (2025-06-19)
+
+
+### Bug Fixes
+
+* api calls ([ba6ffd9](https://github.com/BuildBearLabs/buildbear_x_action/commit/ba6ffd99e9d724c19a2c2c70825c32e80c0e21ad))
+
 # [1.7.0](https://github.com/BuildBearLabs/buildbear_x_action/compare/v1.6.1...v1.7.0) (2025-06-12)
 
 
