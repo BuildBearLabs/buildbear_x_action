@@ -8,6 +8,53 @@ const github = require('@actions/github')
 const { getConfig, getApiToken } = require('../config')
 const { logger } = require('./logger')
 
+/**
+ * Exponential backoff retry utility for API calls
+ * @param {Function} fn - Function to retry
+ * @param {Object} options - Retry configuration
+ * @returns {Promise} Result of the function call
+ */
+const withRetry = async (fn, options = {}) => {
+  const {
+    maxRetries = 3,
+    baseDelay = 1000,
+    maxDelay = 10000,
+    retryCondition = (error) => {
+      // Retry on network errors or 5xx status codes
+      return !error.response || error.response.status >= 500
+    },
+  } = options
+
+  let lastError
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+
+      // Don't retry if we've exhausted attempts or if retry condition fails
+      if (attempt === maxRetries || !retryCondition(error)) {
+        break
+      }
+
+      // Calculate exponential backoff delay with jitter
+      const delay = Math.min(
+        baseDelay * Math.pow(2, attempt) + Math.random() * 1000,
+        maxDelay
+      )
+
+      logger.debug(
+        `API call failed (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${Math.round(delay)}ms...`
+      )
+
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+
+  throw lastError
+}
+
 class BuildBearApiService {
   constructor() {
     this.config = getConfig()
@@ -22,6 +69,9 @@ class BuildBearApiService {
         'Content-Type': 'application/json',
         'User-Agent': 'BuildBear-GitHub-Action/1.0.0',
       },
+      // Increase limits for large file uploads
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
     })
 
     // Add request/response interceptors for logging
@@ -43,7 +93,7 @@ class BuildBearApiService {
         return config
       },
       (error) => {
-        logger.error('API Request Error', error)
+        logger.debug('API Request Error', error)
         return Promise.reject(error)
       }
     )
@@ -59,7 +109,7 @@ class BuildBearApiService {
         return response
       },
       (error) => {
-        logger.error('API Response Error', {
+        logger.debug('API Response Error', {
           status: error.response?.status,
           statusText: error.response?.statusText,
           message: error.message,
@@ -98,7 +148,11 @@ class BuildBearApiService {
 
       logger.debug('Creating sandbox with payload', payload)
 
-      const response = await this.client.post(url, payload)
+      const response = await withRetry(() => this.client.post(url, payload), {
+        maxRetries: this.config.api.retryAttempts || 3,
+        baseDelay: 1000,
+        maxDelay: 10000,
+      })
 
       const sandboxData = {
         url: response.data.sandbox.rpcUrl,
@@ -110,7 +164,7 @@ class BuildBearApiService {
 
       return sandboxData
     } catch (error) {
-      logger.error('Failed to create sandbox', {
+      logger.debug('Failed to create sandbox', {
         chainId,
         blockNumber,
         error: error.response?.data || error.message,
@@ -135,16 +189,24 @@ class BuildBearApiService {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const response = await axios.post(
-          rpcUrl,
+        const response = await withRetry(
+          () =>
+            axios.post(
+              rpcUrl,
+              {
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'eth_chainId',
+                params: [],
+              },
+              {
+                timeout: 5000, // Short timeout for readiness checks
+              }
+            ),
           {
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'eth_chainId',
-            params: [],
-          },
-          {
-            timeout: 5000, // Short timeout for readiness checks
+            maxRetries: 2, // Fewer retries for readiness checks
+            baseDelay: 500,
+            maxDelay: 2000,
           }
         )
 
@@ -163,7 +225,7 @@ class BuildBearApiService {
       }
     }
 
-    logger.error(`Sandbox failed to become ready after ${maxRetries} attempts`)
+    logger.debug(`Sandbox failed to become ready after ${maxRetries} attempts`)
     return false
   }
 
@@ -201,7 +263,11 @@ class BuildBearApiService {
       logger.debug('Notification payload', payload)
 
       const url = `/ci/webhook/${this.apiToken}`
-      await this.client.post(url, payload)
+      await withRetry(() => this.client.post(url, payload), {
+        maxRetries: this.config.api.retryAttempts || 3,
+        baseDelay: 1000,
+        maxDelay: 10000,
+      })
 
       logger.success('Deployment notification sent successfully')
     } catch (error) {
@@ -264,9 +330,19 @@ class BuildBearApiService {
         },
       }
 
-      // Send to backend
+      // Send to backend with extended timeout for large uploads
       const url = `/ci/webhook/${this.apiToken}`
-      const response = await this.client.post(url, webhookPayload)
+      const response = await withRetry(
+        () =>
+          this.client.post(url, webhookPayload, {
+            timeout: 120000, // 2 minutes for large file uploads
+          }),
+        {
+          maxRetries: this.config.api.retryAttempts || 3,
+          baseDelay: 2000,
+          maxDelay: 15000,
+        }
+      )
 
       logger.success('Test artifacts uploaded successfully')
       return {
@@ -277,7 +353,7 @@ class BuildBearApiService {
         metadata,
       }
     } catch (error) {
-      logger.error('Failed to upload test artifacts', error)
+      logger.debug('Failed to upload test artifacts', error)
       throw new Error(
         `Test artifact upload failed: ${error.response?.data?.message || error.message}`
       )
@@ -320,7 +396,17 @@ class BuildBearApiService {
       }
 
       const url = `/ci/webhook/${this.apiToken}`
-      const response = await this.client.post(url, webhookPayload)
+      const response = await withRetry(
+        () =>
+          this.client.post(url, webhookPayload, {
+            timeout: 120000, // 2 minutes for large uploads
+          }),
+        {
+          maxRetries: this.config.api.retryAttempts || 3,
+          baseDelay: 2000,
+          maxDelay: 15000,
+        }
+      )
 
       logger.success('Contract verification artifacts uploaded successfully')
       return {
@@ -332,7 +418,7 @@ class BuildBearApiService {
         metadata,
       }
     } catch (error) {
-      logger.error('Failed to upload verification artifacts', error)
+      logger.debug('Failed to upload verification artifacts', error)
       throw new Error(
         `Verification artifact upload failed: ${error.response?.data?.message || error.message}`
       )
