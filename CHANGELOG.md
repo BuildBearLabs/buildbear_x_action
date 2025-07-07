@@ -1,3 +1,10 @@
+## [1.7.3](https://github.com/BuildBearLabs/buildbear_x_action/compare/v1.7.2...v1.7.3) (2025-07-07)
+
+
+### Bug Fixes
+
+* env io utils class ([cbc1c10](https://github.com/BuildBearLabs/buildbear_x_action/commit/cbc1c10b837180eae947db191f6ec41c42f60814))
+
 ## [1.7.2](https://github.com/BuildBearLabs/buildbear_x_action/compare/v1.7.1...v1.7.2) (2025-07-07)
 
 
