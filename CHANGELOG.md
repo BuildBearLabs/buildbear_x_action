@@ -1,3 +1,10 @@
+## [1.7.1](https://github.com/BuildBearLabs/buildbear_x_action/compare/v1.7.0...v1.7.1) (2025-07-07)
+
+
+### Bug Fixes
+
+* recompiled ([ba2791b](https://github.com/BuildBearLabs/buildbear_x_action/commit/ba2791b3e57980aab94751ed039c6c1aee91fd09))
+
 ## [1.7.1](https://github.com/BuildBearLabs/buildbear_x_action/compare/v1.7.0...v1.7.1) (2025-06-19)
 
 
