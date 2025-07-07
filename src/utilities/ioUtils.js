@@ -22,32 +22,55 @@ class IOUtils {
    * @param {boolean} [options.includeSensitive=false] - Include sensitive variables
    * @param {Array<string>} [options.include] - Specific keys to include
    * @param {Array<string>} [options.exclude] - Specific keys to exclude
+   * @param {boolean} [options.excludeEmpty=true] - Exclude empty or whitespace-only values
    * @returns {Object} Environment variables object
    */
   getAllEnvironmentVariables(options = {}) {
     try {
-      const { includeSensitive = false, include = null, exclude = [] } = options
+      const {
+        includeSensitive = false,
+        include = null,
+        exclude = [],
+        excludeEmpty = true,
+      } = options
 
       const envObject = {}
       const processedKeys = new Set()
 
       Object.keys(process.env).forEach((key) => {
-        // Skip if already processed
-        if (processedKeys.has(key)) return
+        try {
+          // Skip if already processed
+          if (processedKeys.has(key)) return
 
-        // Include/exclude filtering
-        if (include && !include.includes(key)) return
-        if (exclude.includes(key)) return
+          // Include/exclude filtering
+          if (include && !include.includes(key)) return
+          if (exclude.includes(key)) return
 
-        // Sensitive data filtering
-        if (!includeSensitive && this.isSensitiveKey(key)) {
-          envObject[key] = '[REDACTED]'
-          logger.debug(`Redacted sensitive environment variable: ${key}`)
-        } else {
-          envObject[key] = process.env[key]
+          // Get the environment value
+          const envValue = process.env[key]
+
+          // Handle empty or invalid values
+          if (excludeEmpty && this.isEmptyOrInvalidValue(envValue)) {
+            logger.debug(`Skipping empty environment variable: ${key}`)
+            return
+          }
+
+          // Sensitive data filtering
+          if (!includeSensitive && this.isSensitiveKey(key)) {
+            envObject[key] = '[REDACTED]'
+            logger.debug(`Redacted sensitive environment variable: ${key}`)
+          } else {
+            // Ensure we have a valid string value
+            envObject[key] = this.sanitizeEnvironmentValue(envValue)
+          }
+
+          processedKeys.add(key)
+        } catch (keyError) {
+          logger.debug(`Error processing environment variable ${key}:`, {
+            error: keyError.message,
+          })
+          // Skip this key and continue with others
         }
-
-        processedKeys.add(key)
       })
 
       logger.debug(
@@ -71,6 +94,62 @@ class IOUtils {
     return this.sensitiveEnvKeys.some((sensitiveKey) =>
       upperKey.includes(sensitiveKey)
     )
+  }
+
+  /**
+   * Check if the environment value is empty or invalid
+   *
+   * @param {*} value - Environment variable value
+   * @returns {boolean} True if value is empty or invalid
+   */
+  isEmptyOrInvalidValue(value) {
+    // Check for null, undefined, or non-string values
+    if (value === null || value === undefined) {
+      return true
+    }
+
+    // Convert to string if it's not already
+    const stringValue = String(value)
+
+    // Check for empty string or whitespace-only values
+    if (stringValue.trim() === '') {
+      return true
+    }
+
+    // Check for common "empty" patterns like "API: " (key with empty value)
+    if (/^[A-Z_]+:\s*$/.test(stringValue)) {
+      return true
+    }
+
+    return false
+  }
+
+  /**
+   * Sanitize environment value to ensure it's a valid string
+   *
+   * @param {*} value - Environment variable value
+   * @returns {string} Sanitized string value
+   */
+  sanitizeEnvironmentValue(value) {
+    try {
+      // Handle null/undefined
+      if (value === null || value === undefined) {
+        return ''
+      }
+
+      // Convert to string and trim whitespace
+      const stringValue = String(value).trim()
+
+      // Handle empty or invalid patterns
+      if (this.isEmptyOrInvalidValue(stringValue)) {
+        return ''
+      }
+
+      return stringValue
+    } catch (error) {
+      logger.debug('Error sanitizing environment value:', { error })
+      return ''
+    }
   }
 
   /**
