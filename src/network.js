@@ -40,15 +40,21 @@ const RPC_URL = {
       'https://lb.drpc.org/ogrpc?network=sepolia&dkey=AgsHzj-05Uovs5mK4tt6_lQ383cAPHUR8LSXbrRhIxXF',
     ],
   },
-  43114: { index: 0, urls: ['https://rpc.ankr.com/avalanche'] },
-  2222: { index: 0, urls: ['https://evm.kava.io'] },
+  43114: {
+    index: 0,
+    urls: [
+      'https://lb.drpc.org/avalanche/Av-99EUDmEV0qK17139GrenBAwCkbrcR8LSOEklbR4ac',
+    ],
+  },
   1101: { index: 0, urls: ['https://zkevm-rpc.com'] },
   59144: { index: 0, urls: ['https://rpc.linea.build'] },
   59141: { index: 0, urls: ['https://rpc.sepolia.linea.build'] },
   100: { index: 0, urls: ['https://rpc.ankr.com/gnosis'] },
   97: {
     index: 0,
-    urls: ['https://rpc.ankr.com/bsc_testnet_chapel'],
+    urls: [
+      'https://lb.drpc.org/bsc-testnet/Av-99EUDmEV0qK17139GrenBAwCkbrcR8LSOEklbR4ac',
+    ],
   },
   165: { index: 0, urls: ['https://testnet.omni.network'] },
   17000: {

@@ -465,8 +465,10 @@ class IOUtils {
         // Parse key-value pairs
         if (currentProfile && trimmedLine.includes('=')) {
           const [key, ...valueParts] = trimmedLine.split('=')
-          const value = valueParts.join('=').trim().replace(/['"]/g, '')
-          profiles[currentProfile][key.trim()] = value
+          profiles[currentProfile][key.trim()] = valueParts
+            .join('=')
+            .trim()
+            .replace(/['"]/g, '')
         }
       }
 
