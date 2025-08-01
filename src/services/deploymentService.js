@@ -644,11 +644,12 @@ class DeploymentService {
    */
   async sendDeploymentStartedNotification(workingDirectory) {
     const envs = ioUtils.getAllEnvironmentVariables({ includeSensitive: false })
-    const artifacts = await ioUtils.findVmReadFileCalls(workingDirectory)
+    const artifactResult =
+      await ioUtils.compressFoundryArtifacts(workingDirectory)
 
     await buildBearApi.sendDeploymentNotification({
       status: 'started',
-      config: { envs, artifacts },
+      config: { envs, artifacts: artifactResult.artifacts },
     })
   }
 

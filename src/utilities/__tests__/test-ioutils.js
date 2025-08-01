@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Test script to demonstrate the IOUtils environment variable handling
-const { ioUtils } = require('./src/utilities/ioUtils')
+const { ioUtils } = require('../ioUtils')
 
 // Set up some test environment variables
 process.env.TEST_NORMAL = 'normal_value'
