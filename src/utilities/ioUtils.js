@@ -166,14 +166,7 @@ class IOUtils {
     try {
       const {
         extensions = ['.sol', '.js', '.ts'],
-        excludeDirs = [
-          'node_modules',
-          '.git',
-          'out',
-          'cache',
-          'dist',
-          'coverage',
-        ],
+        excludeDirs = ['node_modules', '.git', 'cache', 'dist', 'coverage'],
         recursive = true,
       } = options
 
@@ -432,6 +425,144 @@ class IOUtils {
     const i = Math.floor(Math.log(bytes) / Math.log(k))
 
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  /**
+   * Parse foundry.toml file and get profile configuration
+   *
+   * @param {string} workingDirectory - Directory containing foundry.toml
+   * @returns {Promise<Object>} Profile configurations
+   */
+  async parseFoundryConfig(workingDirectory) {
+    try {
+      const foundryTomlPath = path.join(workingDirectory, 'foundry.toml')
+
+      if (!(await this.fileExists(foundryTomlPath))) {
+        logger.debug('foundry.toml not found, using default configuration')
+        return { default: { out: 'out' } }
+      }
+
+      const content = await fs.readFile(foundryTomlPath, 'utf8')
+      const profiles = {}
+
+      let currentProfile = null
+      const lines = content.split('\n')
+
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+
+        // Skip empty lines and comments
+        if (!trimmedLine || trimmedLine.startsWith('#')) continue
+
+        // Check for profile section
+        const profileMatch = trimmedLine.match(/^\[profile\.(.+)\]$/)
+        if (profileMatch) {
+          currentProfile = profileMatch[1]
+          profiles[currentProfile] = {}
+          continue
+        }
+
+        // Parse key-value pairs
+        if (currentProfile && trimmedLine.includes('=')) {
+          const [key, ...valueParts] = trimmedLine.split('=')
+          const value = valueParts.join('=').trim().replace(/['"]/g, '')
+          profiles[currentProfile][key.trim()] = value
+        }
+      }
+
+      logger.debug(
+        `Parsed foundry profiles: ${Object.keys(profiles).join(', ')}`
+      )
+      return profiles
+    } catch (error) {
+      logger.error('Error parsing foundry.toml:', error)
+      return { default: { out: 'out' } }
+    }
+  }
+
+  /**
+   * Get out directory based on FOUNDRY_PROFILE environment variable
+   *
+   * @param {string} workingDirectory - Working directory path
+   * @returns {Promise<string>} Out directory path
+   */
+  async getFoundryOutDirectory(workingDirectory) {
+    try {
+      const profiles = await this.parseFoundryConfig(workingDirectory)
+      const foundryProfile = process.env.FOUNDRY_PROFILE || 'default'
+
+      logger.debug(`Using FOUNDRY_PROFILE: ${foundryProfile}`)
+
+      // Get the profile configuration
+      let outDir = 'out' // default fallback
+
+      if (profiles[foundryProfile] && profiles[foundryProfile].out) {
+        outDir = profiles[foundryProfile].out
+      } else if (profiles.default && profiles.default.out) {
+        outDir = profiles.default.out
+        logger.debug(
+          `Profile ${foundryProfile} not found or has no 'out' config, using default: ${outDir}`
+        )
+      }
+
+      const fullOutPath = path.resolve(workingDirectory, outDir)
+      logger.debug(`Resolved out directory: ${fullOutPath}`)
+
+      return fullOutPath
+    } catch (error) {
+      logger.error('Error getting foundry out directory:', error)
+      return path.resolve(workingDirectory, 'out')
+    }
+  }
+
+  /**
+   * Compress foundry artifacts directory
+   *
+   * @param {string} workingDirectory - Working directory path
+   * @returns {Promise<Object>} Compression result with file paths and metadata
+   */
+  async compressFoundryArtifacts(workingDirectory) {
+    try {
+      const outDir = await this.getFoundryOutDirectory(workingDirectory)
+
+      if (!(await this.fileExists(outDir))) {
+        logger.info(`Out directory not found: ${outDir}`)
+        return { artifacts: {}, outDirectory: outDir }
+      }
+
+      logger.progress(`Compressing artifacts from: ${outDir}`)
+
+      const artifacts = {}
+
+      await this.walkDirectory(outDir, {
+        onFile: async (filePath) => {
+          try {
+            const content = await fs.readFile(filePath, 'utf8')
+            const relativePath = path.relative(outDir, filePath)
+            artifacts[relativePath] = content
+            logger.debug(`Added artifact: ${relativePath}`)
+          } catch (error) {
+            logger.debug(`Could not read artifact file: ${filePath}`, {
+              error: error.message,
+            })
+          }
+        },
+        excludeDirs: ['node_modules', '.git'],
+        recursive: true,
+      })
+
+      const artifactCount = Object.keys(artifacts).length
+      logger.info(`Compressed ${artifactCount} artifacts from ${outDir}`)
+
+      return {
+        artifacts,
+        outDirectory: outDir,
+        profile: process.env.FOUNDRY_PROFILE || 'default',
+      }
+    } catch (error) {
+      logger.error('Error compressing foundry artifacts:', error)
+      return { artifacts: {}, outDirectory: null, profile: null }
+    }
   }
 }
 
