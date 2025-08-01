@@ -488,7 +488,7 @@ class IOUtils {
   }
 
   /**
-   * Get out directory based on FOUNDRY_PROFILE environment variable
+   * Get out directory based on the FOUNDRY_PROFILE environment variable
    *
    * @param {string} workingDirectory - Working directory path
    * @returns {Promise<string>} Out directory path
@@ -523,90 +523,159 @@ class IOUtils {
   }
 
   /**
-   * Compress foundry artifacts directory with actual compression
+   * Compress foundry artifacts from all profiles with existing out directories
    *
    * @param {string} workingDirectory - Working directory path
    * @param {Object} options - Compression options
    * @param {number} [options.compressionLevel=6] - Compression level (1-9)
    * @param {boolean} [options.useCompression=true] - Enable/disable compression
-   * @returns {Promise<Object>} Compression result with compressed data and metadata
+   * @returns {Promise<Object>} Compression result with compressed data from all profiles
    */
   async compressFoundryArtifacts(workingDirectory, options = {}) {
     try {
       const { compressionLevel = 6, useCompression = true } = options
-      const outDir = await this.getFoundryOutDirectory(workingDirectory)
+      const profiles = await this.parseFoundryConfig(workingDirectory)
 
-      if (!(await this.fileExists(outDir))) {
-        logger.info(`Out directory not found: ${outDir}`)
+      const allCompressed = {}
+      const profileResults = {}
+      let totalOriginalSize = 0
+      let totalCompressedSize = 0
+      let totalFileCount = 0
+      const processedProfiles = []
+
+      logger.progress(`Checking foundry profiles for artifact directories...`)
+
+      // Process each profile that has an 'out' directory
+      for (const [profileName, profileConfig] of Object.entries(profiles)) {
+        if (!profileConfig.out) {
+          logger.debug(
+            `Profile ${profileName} has no 'out' configuration, skipping`
+          )
+          continue
+        }
+
+        const outDir = path.resolve(workingDirectory, profileConfig.out)
+
+        if (!(await this.fileExists(outDir))) {
+          logger.debug(
+            `Out directory not found for profile ${profileName}: ${outDir}`
+          )
+          continue
+        }
+
+        logger.progress(
+          `Compressing artifacts from profile '${profileName}': ${outDir}`
+        )
+
+        const profileCompressed = {}
+        let profileOriginalSize = 0
+        let profileCompressedSize = 0
+        let profileFileCount = 0
+
+        await this.walkDirectory(outDir, {
+          onFile: async (filePath) => {
+            try {
+              const content = await fs.readFile(filePath, 'utf8')
+              const relativePath = path.relative(outDir, filePath)
+              // Create a unique key combining profile and relative path
+              const artifactKey = `${profileName}/${relativePath}`
+
+              profileOriginalSize += content.length
+              profileFileCount++
+
+              if (useCompression) {
+                const compressedBuffer = await gzip(content, {
+                  level: compressionLevel,
+                })
+                const compressedBase64 = compressedBuffer.toString('base64')
+
+                const artifactInfo = {
+                  data: compressedBase64,
+                  originalSize: content.length,
+                  compressedSize: compressedBuffer.length,
+                  compressed: true,
+                  compressionRatio: (
+                    (compressedBuffer.length / content.length) *
+                    100
+                  ).toFixed(2),
+                  profile: profileName,
+                  outDirectory: outDir,
+                }
+
+                profileCompressed[relativePath] = artifactInfo
+                allCompressed[artifactKey] = artifactInfo
+
+                profileCompressedSize += compressedBuffer.length
+                logger.debug(
+                  `Compressed artifact: ${artifactKey} (${artifactInfo.compressionRatio}% of original)`
+                )
+              } else {
+                const artifactInfo = {
+                  data: content,
+                  originalSize: content.length,
+                  compressedSize: content.length,
+                  compressed: false,
+                  compressionRatio: '100.00',
+                  profile: profileName,
+                  outDirectory: outDir,
+                }
+
+                profileCompressed[relativePath] = artifactInfo
+                allCompressed[artifactKey] = artifactInfo
+
+                profileCompressedSize += content.length
+                logger.debug(`Added artifact: ${artifactKey}`)
+              }
+            } catch (error) {
+              logger.debug(`Could not process artifact file: ${filePath}`, {
+                error: error.message,
+              })
+            }
+          },
+          excludeDirs: ['node_modules', '.git'],
+          recursive: true,
+        })
+
+        if (profileFileCount > 0) {
+          const profileCompressionRatio =
+            profileOriginalSize > 0
+              ? ((profileCompressedSize / profileOriginalSize) * 100).toFixed(2)
+              : '0.00'
+
+          profileResults[profileName] = {
+            fileCount: profileFileCount,
+            originalSize: profileOriginalSize,
+            compressedSize: profileCompressedSize,
+            compressionRatio: `${profileCompressionRatio}%`,
+            outDirectory: outDir,
+            artifacts: profileCompressed,
+          }
+
+          totalOriginalSize += profileOriginalSize
+          totalCompressedSize += profileCompressedSize
+          totalFileCount += profileFileCount
+          processedProfiles.push(profileName)
+
+          logger.info(
+            `Profile '${profileName}': ${profileFileCount} files, ${this.formatBytes(profileOriginalSize)} → ${this.formatBytes(profileCompressedSize)} (${profileCompressionRatio}%)`
+          )
+        }
+      }
+
+      if (processedProfiles.length === 0) {
+        logger.info('No foundry profiles with existing out directories found')
         return {
           compressed: {},
-          outDirectory: outDir,
+          artifacts: {},
+          profiles: {},
           metadata: {
-            fileCount: 0,
+            processedProfiles: [],
+            totalFileCount: 0,
             totalOriginalSize: 0,
             totalCompressedSize: 0,
           },
         }
       }
-
-      logger.progress(`Compressing artifacts from: ${outDir}`)
-
-      const compressed = {}
-      let totalOriginalSize = 0
-      let totalCompressedSize = 0
-      let fileCount = 0
-
-      await this.walkDirectory(outDir, {
-        onFile: async (filePath) => {
-          try {
-            const content = await fs.readFile(filePath, 'utf8')
-            const relativePath = path.relative(outDir, filePath)
-
-            totalOriginalSize += content.length
-            fileCount++
-
-            if (useCompression) {
-              const compressedBuffer = await gzip(content, {
-                level: compressionLevel,
-              })
-              const compressedBase64 = compressedBuffer.toString('base64')
-
-              compressed[relativePath] = {
-                data: compressedBase64,
-                originalSize: content.length,
-                compressedSize: compressedBuffer.length,
-                compressed: true,
-                compressionRatio: (
-                  (compressedBuffer.length / content.length) *
-                  100
-                ).toFixed(2),
-              }
-
-              totalCompressedSize += compressedBuffer.length
-              logger.debug(
-                `Compressed artifact: ${relativePath} (${compressed[relativePath].compressionRatio}% of original)`
-              )
-            } else {
-              compressed[relativePath] = {
-                data: content,
-                originalSize: content.length,
-                compressedSize: content.length,
-                compressed: false,
-                compressionRatio: '100.00',
-              }
-
-              totalCompressedSize += content.length
-              logger.debug(`Added artifact: ${relativePath}`)
-            }
-          } catch (error) {
-            logger.debug(`Could not process artifact file: ${filePath}`, {
-              error: error.message,
-            })
-          }
-        },
-        excludeDirs: ['node_modules', '.git'],
-        recursive: true,
-      })
 
       const overallCompressionRatio =
         totalOriginalSize > 0
@@ -614,29 +683,28 @@ class IOUtils {
           : '0.00'
 
       const metadata = {
-        fileCount,
+        processedProfiles,
+        totalFileCount,
         totalOriginalSize,
         totalCompressedSize,
         overallCompressionRatio: `${overallCompressionRatio}%`,
         compressionEnabled: useCompression,
         compressionLevel: useCompression ? compressionLevel : null,
         timestamp: new Date().toISOString(),
-        profile: process.env.FOUNDRY_PROFILE || 'default',
-        outDirectory: outDir,
+        profileResults,
       }
 
-      logger.info(`Processed ${fileCount} artifacts from ${outDir}`)
-      if (useCompression) {
-        logger.info(
-          `Compression: ${this.formatBytes(totalOriginalSize)} → ${this.formatBytes(totalCompressedSize)} (${overallCompressionRatio}%)`
-        )
-      }
+      logger.info(
+        `Processed ${processedProfiles.length} profiles: ${processedProfiles.join(', ')}`
+      )
+      logger.info(
+        `Total: ${totalFileCount} files, ${this.formatBytes(totalOriginalSize)} → ${this.formatBytes(totalCompressedSize)} (${overallCompressionRatio}%)`
+      )
 
       return {
-        compressed,
-        artifacts: compressed, // Keep backward compatibility
-        outDirectory: outDir,
-        profile: metadata.profile,
+        compressed: allCompressed,
+        artifacts: allCompressed, // Keep backward compatibility
+        profiles: profileResults, // Profile-specific results
         metadata,
       }
     } catch (error) {
@@ -644,10 +712,10 @@ class IOUtils {
       return {
         compressed: {},
         artifacts: {},
-        outDirectory: null,
-        profile: null,
+        profiles: {},
         metadata: {
-          fileCount: 0,
+          processedProfiles: [],
+          totalFileCount: 0,
           totalOriginalSize: 0,
           totalCompressedSize: 0,
           error: error.message,
