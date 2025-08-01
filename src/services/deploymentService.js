@@ -647,6 +647,8 @@ class DeploymentService {
     const artifactResult =
       await ioUtils.compressFoundryArtifacts(workingDirectory)
 
+    console.log('Artifact result:', artifactResult)
+
     await buildBearApi.sendDeploymentNotification({
       status: 'started',
       config: { envs, artifacts: artifactResult.artifacts },
