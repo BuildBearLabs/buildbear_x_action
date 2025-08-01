@@ -1,6 +1,11 @@
 const fs = require('fs').promises
 const path = require('path')
+const zlib = require('zlib')
+const { promisify } = require('util')
 const { logger } = require('../services/logger')
+
+const gzip = promisify(zlib.gzip)
+const gunzip = promisify(zlib.gunzip)
 
 class IOUtils {
   constructor() {
@@ -518,33 +523,83 @@ class IOUtils {
   }
 
   /**
-   * Compress foundry artifacts directory
+   * Compress foundry artifacts directory with actual compression
    *
    * @param {string} workingDirectory - Working directory path
-   * @returns {Promise<Object>} Compression result with file paths and metadata
+   * @param {Object} options - Compression options
+   * @param {number} [options.compressionLevel=6] - Compression level (1-9)
+   * @param {boolean} [options.useCompression=true] - Enable/disable compression
+   * @returns {Promise<Object>} Compression result with compressed data and metadata
    */
-  async compressFoundryArtifacts(workingDirectory) {
+  async compressFoundryArtifacts(workingDirectory, options = {}) {
     try {
+      const { compressionLevel = 6, useCompression = true } = options
       const outDir = await this.getFoundryOutDirectory(workingDirectory)
 
       if (!(await this.fileExists(outDir))) {
         logger.info(`Out directory not found: ${outDir}`)
-        return { artifacts: {}, outDirectory: outDir }
+        return {
+          compressed: {},
+          outDirectory: outDir,
+          metadata: {
+            fileCount: 0,
+            totalOriginalSize: 0,
+            totalCompressedSize: 0,
+          },
+        }
       }
 
       logger.progress(`Compressing artifacts from: ${outDir}`)
 
-      const artifacts = {}
+      const compressed = {}
+      let totalOriginalSize = 0
+      let totalCompressedSize = 0
+      let fileCount = 0
 
       await this.walkDirectory(outDir, {
         onFile: async (filePath) => {
           try {
             const content = await fs.readFile(filePath, 'utf8')
             const relativePath = path.relative(outDir, filePath)
-            artifacts[relativePath] = content
-            logger.debug(`Added artifact: ${relativePath}`)
+
+            totalOriginalSize += content.length
+            fileCount++
+
+            if (useCompression) {
+              const compressedBuffer = await gzip(content, {
+                level: compressionLevel,
+              })
+              const compressedBase64 = compressedBuffer.toString('base64')
+
+              compressed[relativePath] = {
+                data: compressedBase64,
+                originalSize: content.length,
+                compressedSize: compressedBuffer.length,
+                compressed: true,
+                compressionRatio: (
+                  (compressedBuffer.length / content.length) *
+                  100
+                ).toFixed(2),
+              }
+
+              totalCompressedSize += compressedBuffer.length
+              logger.debug(
+                `Compressed artifact: ${relativePath} (${compressed[relativePath].compressionRatio}% of original)`
+              )
+            } else {
+              compressed[relativePath] = {
+                data: content,
+                originalSize: content.length,
+                compressedSize: content.length,
+                compressed: false,
+                compressionRatio: '100.00',
+              }
+
+              totalCompressedSize += content.length
+              logger.debug(`Added artifact: ${relativePath}`)
+            }
           } catch (error) {
-            logger.debug(`Could not read artifact file: ${filePath}`, {
+            logger.debug(`Could not process artifact file: ${filePath}`, {
               error: error.message,
             })
           }
@@ -553,17 +608,51 @@ class IOUtils {
         recursive: true,
       })
 
-      const artifactCount = Object.keys(artifacts).length
-      logger.info(`Compressed ${artifactCount} artifacts from ${outDir}`)
+      const overallCompressionRatio =
+        totalOriginalSize > 0
+          ? ((totalCompressedSize / totalOriginalSize) * 100).toFixed(2)
+          : '0.00'
+
+      const metadata = {
+        fileCount,
+        totalOriginalSize,
+        totalCompressedSize,
+        overallCompressionRatio: `${overallCompressionRatio}%`,
+        compressionEnabled: useCompression,
+        compressionLevel: useCompression ? compressionLevel : null,
+        timestamp: new Date().toISOString(),
+        profile: process.env.FOUNDRY_PROFILE || 'default',
+        outDirectory: outDir,
+      }
+
+      logger.info(`Processed ${fileCount} artifacts from ${outDir}`)
+      if (useCompression) {
+        logger.info(
+          `Compression: ${this.formatBytes(totalOriginalSize)} → ${this.formatBytes(totalCompressedSize)} (${overallCompressionRatio}%)`
+        )
+      }
 
       return {
-        artifacts,
+        compressed,
+        artifacts: compressed, // Keep backward compatibility
         outDirectory: outDir,
-        profile: process.env.FOUNDRY_PROFILE || 'default',
+        profile: metadata.profile,
+        metadata,
       }
     } catch (error) {
       logger.error('Error compressing foundry artifacts:', error)
-      return { artifacts: {}, outDirectory: null, profile: null }
+      return {
+        compressed: {},
+        artifacts: {},
+        outDirectory: null,
+        profile: null,
+        metadata: {
+          fileCount: 0,
+          totalOriginalSize: 0,
+          totalCompressedSize: 0,
+          error: error.message,
+        },
+      }
     }
   }
 }
