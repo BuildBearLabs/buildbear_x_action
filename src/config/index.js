@@ -50,7 +50,7 @@ const baseConfig = {
   // File Processing
   files: {
     maxSize: parseInt(process.env.MAX_FILE_SIZE, 10) || 500 * 1024 * 1024, // 100MB
-    compressionLevel: parseInt(process.env.COMPRESSION_LEVEL, 10) || 6,
+    compressionLevel: parseInt(process.env.COMPRESSION_LEVEL, 10) || 10,
   },
 }
 
