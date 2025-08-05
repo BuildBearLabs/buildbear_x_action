@@ -1,15 +1,30 @@
 const fs = require('fs').promises
 const path = require('path')
-const zlib = require('zlib')
+const lzma = require('lzma')
 const crypto = require('crypto')
 const os = require('os')
 const { promisify } = require('util')
 const { logger } = require('../services/logger')
 const { getConfig } = require('../config')
 
-// Promisify zlib functions
-const gzip = promisify(zlib.gzip)
-const gunzip = promisify(zlib.gunzip)
+// LZMA compression functions
+const lzmaCompress = async (data, level = 6) => {
+  return new Promise((resolve, reject) => {
+    lzma.compress(data, level, (result, error) => {
+      if (error) reject(error)
+      else resolve(result)
+    })
+  })
+}
+
+const lzmaDecompress = async (data) => {
+  return new Promise((resolve, reject) => {
+    lzma.decompress(data, (result, error) => {
+      if (error) reject(error)
+      else resolve(result)
+    })
+  })
+}
 
 class CompressionUtils {
   constructor() {
@@ -23,16 +38,22 @@ class CompressionUtils {
    * @param {string} [outputDir] - Output directory for compressed file
    * @param {Object} [options] - Compression options
    * @param {number} [options.compressionLevel] - Compression level (1-9)
+   * @param {string} [options.algorithm='brotli'] - Compression algorithm ('gzip', 'brotli')
    * @param {boolean} [options.validateAfterCompression=true] - Validate after compression
    * @param {Function} [options.onProgress] - Progress callback
+   * @param {boolean} [options.deduplication=true] - Enable file deduplication
+   * @param {boolean} [options.deltaCompression=true] - Enable delta compression for similar files
    * @returns {Promise<string>} Path to compressed file
    */
   async compressDirectory(sourceDir, outputDir = null, options = {}) {
     try {
       const {
-        compressionLevel = this.config.files?.compressionLevel || 6,
+        compressionLevel = this.config.files?.compressionLevel || 9,
+        algorithm = 'lzma',
         validateAfterCompression = true,
         onProgress = null,
+        deduplication = true,
+        deltaCompression = true,
       } = options
 
       logger.progress(`Starting compression of directory: ${sourceDir}`)
@@ -56,7 +77,10 @@ class CompressionUtils {
       // Create file map with compression
       const fileMap = await this.compressFiles(files, sourceDir, {
         compressionLevel,
+        algorithm,
         onProgress,
+        deduplication,
+        deltaCompression,
       })
 
       // Create metadata
@@ -68,7 +92,7 @@ class CompressionUtils {
         metadata,
         finalOutputDir,
         sourceDir,
-        { compressionLevel }
+        { compressionLevel, algorithm }
       )
 
       // Validate if requested
@@ -169,8 +193,16 @@ class CompressionUtils {
    * @returns {Promise<Object>} File map with compressed data
    */
   async compressFiles(files, baseDir, options = {}) {
-    const { compressionLevel = 6, onProgress = null } = options
+    const {
+      compressionLevel = 9,
+      algorithm = 'brotli',
+      onProgress = null,
+      deduplication = true,
+      deltaCompression = true,
+    } = options
     const fileMap = {}
+    const fileHashes = new Map()
+    const fileGroups = new Map()
 
     for (let i = 0; i < files.length; i++) {
       const filePath = files[i]
@@ -187,6 +219,11 @@ class CompressionUtils {
       try {
         await this.compressFile(filePath, fileMap, baseDir, {
           compressionLevel,
+          algorithm,
+          fileHashes,
+          fileGroups,
+          deduplication,
+          deltaCompression,
         })
       } catch (error) {
         logger.warn(`Failed to compress file: ${filePath}`, {
@@ -209,38 +246,122 @@ class CompressionUtils {
    */
   async compressFile(filePath, fileMap, baseDir, options = {}) {
     try {
-      const { compressionLevel = 6 } = options
+      const {
+        compressionLevel = 9,
+        algorithm = 'lzma',
+        fileHashes,
+        fileGroups,
+        deduplication = true,
+        deltaCompression = true,
+      } = options
 
       // Read file content
-      const content = await fs.readFile(filePath, 'utf8')
+      const content = await fs.readFile(filePath)
+      const isText = this.isTextFile(filePath)
+      const fileContent = isText ? content.toString('utf8') : content
 
       // Calculate original hash for validation
       const originalHash = this.calculateHash(content)
-
-      // Compress content
-      const compressed = await gzip(content, {
-        level: compressionLevel,
-      })
-
-      // Create relative path
       const relativePath = this.getRelativePath(filePath, baseDir)
 
-      // Store compressed data
-      fileMap[relativePath] = {
-        content: compressed.toString('base64'),
-        originalHash,
-        originalSize: content.length,
-        compressedSize: compressed.length,
-        compressionRatio: ((compressed.length / content.length) * 100).toFixed(
-          2
-        ),
+      // Check for duplicate files
+      if (deduplication && fileHashes.has(originalHash)) {
+        const duplicateRef = fileHashes.get(originalHash)
+        fileMap[relativePath] = {
+          type: 'duplicate',
+          referenceFile: duplicateRef,
+          originalHash,
+          originalSize: content.length,
+        }
+        logger.debug(`Deduplicated file: ${relativePath} -> ${duplicateRef}`)
+        return
+      }
+
+      // Store hash reference
+      if (deduplication) {
+        fileHashes.set(originalHash, relativePath)
+      }
+
+      // Apply pre-compression optimizations for text files
+      let dataToCompress = fileContent
+      if (isText && deltaCompression) {
+        dataToCompress = this.applyTextOptimizations(fileContent)
+      }
+
+      // Compress content based on algorithm
+      let compressed
+      if (algorithm === 'lzma') {
+        // LZMA compression level goes from 0-9
+        compressed = Buffer.from(
+          await lzmaCompress(dataToCompress, compressionLevel)
+        )
+      } else {
+        // Fallback to basic LZMA with default settings
+        compressed = Buffer.from(await lzmaCompress(dataToCompress))
+      }
+
+      // Try dictionary compression for similar files
+      if (deltaCompression && isText) {
+        const betterCompressed = await this.tryDictionaryCompression(
+          dataToCompress,
+          relativePath,
+          fileGroups,
+          algorithm,
+          compressionLevel
+        )
+        if (betterCompressed && betterCompressed.length < compressed.length) {
+          compressed = betterCompressed
+          fileMap[relativePath] = {
+            type: 'dictionary',
+            content: compressed.toString('base64'),
+            originalHash,
+            originalSize: content.length,
+            compressedSize: compressed.length,
+            compressionRatio: (
+              (compressed.length / content.length) *
+              100
+            ).toFixed(2),
+            algorithm,
+            dictionary: betterCompressed.dictionary,
+          }
+        } else {
+          fileMap[relativePath] = {
+            type: 'standard',
+            content: compressed.toString('base64'),
+            originalHash,
+            originalSize: content.length,
+            compressedSize: compressed.length,
+            compressionRatio: (
+              (compressed.length / content.length) *
+              100
+            ).toFixed(2),
+            algorithm,
+          }
+        }
+      } else {
+        fileMap[relativePath] = {
+          type: 'standard',
+          content: compressed.toString('base64'),
+          originalHash,
+          originalSize: content.length,
+          compressedSize: compressed.length,
+          compressionRatio: (
+            (compressed.length / content.length) *
+            100
+          ).toFixed(2),
+          algorithm,
+        }
       }
 
       // Validate compression immediately
-      await this.validateFileCompression(fileMap[relativePath], content)
+      await this.validateFileCompression(
+        fileMap[relativePath],
+        content,
+        algorithm
+      )
 
       logger.debug(
-        `Compressed file: ${relativePath} (${fileMap[relativePath].compressionRatio}% of original)`
+        `Compressed file: ${relativePath} (${fileMap[relativePath].compressionRatio}% of original) using ${algorithm}`
       )
     } catch (error) {
       throw new Error(`Error compressing file ${filePath}: ${error.message}`)
@@ -248,19 +369,208 @@ class CompressionUtils {
   }
 
   /**
+   * Check if file is text-based
+   *
+   * @param {string} filePath - File path
+   * @returns {boolean} True if text file
+   */
+  isTextFile(filePath) {
+    const textExtensions = [
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.json',
+      '.txt',
+      '.md',
+      '.yml',
+      '.yaml',
+      '.xml',
+      '.html',
+      '.css',
+      '.scss',
+      '.py',
+      '.java',
+      '.c',
+      '.cpp',
+      '.h',
+      '.hpp',
+      '.go',
+      '.rs',
+      '.rb',
+      '.php',
+      '.sql',
+      '.sh',
+      '.bash',
+    ]
+    const ext = path.extname(filePath).toLowerCase()
+    return textExtensions.includes(ext)
+  }
+
+  /**
+   * Apply text optimizations before compression
+   *
+   * @param {string} content - Text content
+   * @returns {string} Optimized content
+   */
+  applyTextOptimizations(content) {
+    // Remove excessive whitespace while preserving structure
+    let optimized = content
+      .replace(/\r\n/g, '\n') // Normalize line endings
+      .replace(/[ \t]+$/gm, '') // Remove trailing whitespace
+      .replace(/\n{3,}/g, '\n\n') // Reduce multiple empty lines
+
+    // For source code, apply additional optimizations
+    if (this.isSourceCode(content)) {
+      // Remove comments in a safe way (basic implementation)
+      optimized = optimized
+        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
+        .replace(/\/\/.*$/gm, '') // Remove line comments
+        .replace(/^\s*\n/gm, '') // Remove empty lines
+    }
+
+    return optimized
+  }
+
+  /**
+   * Check if content appears to be source code
+   *
+   * @param {string} content - File content
+   * @returns {boolean} True if likely source code
+   */
+  isSourceCode(content) {
+    const codeIndicators = [
+      /function\s+\w+\s*\(/,
+      /class\s+\w+/,
+      /const\s+\w+\s*=/,
+      /import\s+.*from/,
+      /export\s+(default\s+)?/,
+    ]
+    return codeIndicators.some((pattern) => pattern.test(content))
+  }
+
+  /**
+   * Try dictionary-based compression for similar files
+   *
+   * @param {string} content - File content
+   * @param {string} filePath - File path
+   * @param {Map} fileGroups - File groups map
+   * @param {string} algorithm - Compression algorithm
+   * @param {number} compressionLevel - Compression level
+   * @returns {Promise<Buffer|null>} Compressed data or null
+   */
+  async tryDictionaryCompression(
+    content,
+    filePath,
+    fileGroups,
+    algorithm,
+    compressionLevel
+  ) {
+    try {
+      // Group files by extension
+      const ext = path.extname(filePath)
+      if (!fileGroups.has(ext)) {
+        fileGroups.set(ext, [])
+      }
+
+      const group = fileGroups.get(ext)
+      group.push({ path: filePath, content })
+
+      // If we have enough similar files, create a dictionary
+      if (group.length >= 3) {
+        // Create a simple dictionary from common patterns
+        const dictionary = this.createDictionary(group.map((f) => f.content))
+
+        // Compress with dictionary hint
+        if (algorithm === 'lzma') {
+          // LZMA doesn't support custom dictionaries directly,
+          // but we can prepend common patterns to improve compression
+          const enhancedContent = dictionary + '\n' + content
+          const compressed = Buffer.from(
+            await lzmaCompress(enhancedContent, compressionLevel)
+          )
+          compressed.dictionary = dictionary
+          return compressed
+        }
+      }
+
+      return null
+    } catch (error) {
+      logger.debug(`Dictionary compression failed: ${error.message}`)
+      return null
+    }
+  }
+
+  /**
+   * Create a dictionary from common patterns
+   *
+   * @param {Array<string>} contents - File contents
+   * @returns {string} Dictionary
+   */
+  createDictionary(contents) {
+    const patterns = new Map()
+
+    // Extract common patterns
+    contents.forEach((content) => {
+      // Extract common imports/requires
+      const imports = content.match(/(?:import|require)\s*\([^)]+\)/g) || []
+      imports.forEach((imp) => {
+        patterns.set(imp, (patterns.get(imp) || 0) + 1)
+      })
+
+      // Extract common function signatures
+      const functions = content.match(/function\s+\w+\s*\([^)]*\)/g) || []
+      functions.forEach((func) => {
+        patterns.set(func, (patterns.get(func) || 0) + 1)
+      })
+    })
+
+    // Sort by frequency and take top patterns
+    const topPatterns = Array.from(patterns.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 50)
+      .map(([pattern]) => pattern)
+
+    return topPatterns.join('\n')
+  }
+
+  /**
    * Validate file compression
    *
    * @param {Object} fileInfo - Compressed file info
-   * @param {string} originalContent - Original file content
+   * @param {Buffer|string} originalContent - Original file content
+   * @param {string} algorithm - Compression algorithm
    * @returns {Promise<void>}
    */
-  async validateFileCompression(fileInfo, originalContent) {
+  async validateFileCompression(fileInfo, originalContent, algorithm = 'lzma') {
     try {
-      // Decompress and validate
-      const decompressed = await gunzip(Buffer.from(fileInfo.content, 'base64'))
-      const decompressedHash = this.calculateHash(decompressed)
+      if (fileInfo.type === 'duplicate') {
+        // Skip validation for deduplicated files
+        return
+      }
 
-      if (fileInfo.originalHash !== decompressedHash) {
+      // Decompress and validate
+      let decompressed
+      if (algorithm === 'lzma') {
+        const compressedData = Buffer.from(fileInfo.content, 'base64')
+        decompressed = Buffer.from(await lzmaDecompress(compressedData))
+      } else {
+        // Fallback to LZMA
+        const compressedData = Buffer.from(fileInfo.content, 'base64')
+        decompressed = Buffer.from(await lzmaDecompress(compressedData))
+      }
+
+      // Handle dictionary compression
+      if (fileInfo.type === 'dictionary' && fileInfo.dictionary) {
+        // Remove dictionary prefix
+        const dictLength = Buffer.from(fileInfo.dictionary).length + 1 // +1 for newline
+        decompressed = decompressed.slice(dictLength)
+      }
+
+      const decompressedHash = this.calculateHash(decompressed)
+      const expectedHash = this.calculateHash(originalContent)
+
+      if (expectedHash !== decompressedHash) {
         throw new Error('Hash mismatch after compression')
       }
     } catch (error) {
@@ -319,21 +629,32 @@ class CompressionUtils {
     options = {}
   ) {
     try {
-      const { compressionLevel = 6 } = options
+      const { compressionLevel = 9, algorithm = 'lzma' } = options
 
       // Create final archive object
       const archive = { metadata, files: fileMap }
 
       // Serialize and compress the entire archive
       const serialized = JSON.stringify(archive)
-      const compressedArchive = await gzip(serialized, {
-        level: compressionLevel,
-      })
+
+      let compressedArchive
+      if (algorithm === 'lzma') {
+        compressedArchive = Buffer.from(
+          await lzmaCompress(serialized, compressionLevel)
+        )
+      } else {
+        // Fallback to LZMA with default settings
+        compressedArchive = Buffer.from(await lzmaCompress(serialized))
+      }
 
       // Generate output file path
       const dirName = path.basename(sourceDir)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-      const outputFile = path.join(outputDir, `${dirName}_${timestamp}.gz`)
+      const extension = '.lzma'
+      const outputFile = path.join(
+        outputDir,
+        `${dirName}_${timestamp}${extension}`
+      )
 
       // Write compressed archive
       await fs.writeFile(outputFile, compressedArchive)
@@ -382,7 +703,7 @@ class CompressionUtils {
 
       // Read and decompress archive
       const compressedData = await fs.readFile(archivePath)
-      const decompressedData = await gunzip(compressedData)
+      const decompressedData = Buffer.from(await lzmaDecompress(compressedData))
       const archive = JSON.parse(decompressedData.toString())
 
       // Validate file count
@@ -435,13 +756,23 @@ class CompressionUtils {
     try {
       logger.progress(`Decompressing archive: ${archivePath}`)
 
+      // Determine algorithm from file extension
+      const isLzma = archivePath.endsWith('.lzma')
+
       // Read and decompress archive
       const compressedData = await fs.readFile(archivePath)
-      const decompressedData = await gunzip(compressedData)
+      let decompressedData
+
+      // Always use LZMA for decompression
+      decompressedData = Buffer.from(await lzmaDecompress(compressedData))
+
       const archive = JSON.parse(decompressedData.toString())
 
       // Create output directory
       await fs.mkdir(outputDir, { recursive: true })
+
+      // Track deduplicated files
+      const processedFiles = new Map()
 
       // Extract each file
       let extractedFiles = 0
@@ -451,11 +782,44 @@ class CompressionUtils {
         // Create directory structure
         await fs.mkdir(path.dirname(outputPath), { recursive: true })
 
-        // Decompress and write file
-        const decompressedContent = await gunzip(
-          Buffer.from(fileInfo.content, 'base64')
-        )
+        let decompressedContent
+
+        // Handle different file types
+        if (fileInfo.type === 'duplicate') {
+          // Copy from reference file
+          const refPath = path.join(outputDir, fileInfo.referenceFile)
+          if (processedFiles.has(fileInfo.referenceFile)) {
+            decompressedContent = processedFiles.get(fileInfo.referenceFile)
+          } else {
+            throw new Error(
+              `Reference file not yet processed: ${fileInfo.referenceFile}`
+            )
+          }
+        } else {
+          // Decompress based on algorithm
+          const algorithm = fileInfo.algorithm || 'lzma'
+          if (algorithm === 'lzma') {
+            const compressedData = Buffer.from(fileInfo.content, 'base64')
+            decompressedContent = Buffer.from(
+              await lzmaDecompress(compressedData)
+            )
+          } else {
+            // Fallback to LZMA
+            const compressedData = Buffer.from(fileInfo.content, 'base64')
+            decompressedContent = Buffer.from(
+              await lzmaDecompress(compressedData)
+            )
+          }
+
+          // Handle dictionary compression
+          if (fileInfo.type === 'dictionary' && fileInfo.dictionary) {
+            const dictLength = Buffer.from(fileInfo.dictionary).length + 1
+            decompressedContent = decompressedContent.slice(dictLength)
+          }
+        }
+
         await fs.writeFile(outputPath, decompressedContent)
+        processedFiles.set(relativePath, decompressedContent)
 
         // Validate extracted file
         const extractedHash = this.calculateHash(decompressedContent)
@@ -525,6 +889,18 @@ const compressBboutDirectory = async (sourceDir, outputDir) => {
   return compressionUtils.compressDirectory(sourceDir, outputDir)
 }
 
+// Create ultra-compressed version for maximum compression
+const ultraCompressDirectory = async (sourceDir, outputDir) => {
+  const compressionUtils = new CompressionUtils()
+  return compressionUtils.compressDirectory(sourceDir, outputDir, {
+    compressionLevel: 9, // LZMA max level
+    algorithm: 'lzma',
+    deduplication: true,
+    deltaCompression: true,
+    validateAfterCompression: false, // Skip validation for speed
+  })
+}
+
 // Export class and singleton instance
 const compressionUtils = new CompressionUtils()
 
@@ -533,5 +909,6 @@ module.exports = {
   compressionUtils,
   compressDirectory: compressionUtils.compressDirectory.bind(compressionUtils),
   decompressArchive: compressionUtils.decompressArchive.bind(compressionUtils),
+  ultraCompressDirectory,
   compressBboutDirectory, // For backward compatibility
 }
