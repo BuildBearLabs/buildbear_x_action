@@ -3,7 +3,7 @@
  * Handles all interactions with BuildBear's backend services
  */
 
-const { default: axios } = require('axios')
+const axios = require('axios')
 const github = require('@actions/github')
 const { getConfig, getApiToken } = require('../config')
 const { logger } = require('./logger')
@@ -279,29 +279,20 @@ class BuildBearApiService {
   }
 
   /**
-   * Send compressed test artifacts to backend
+   * Initialize test simulation and get presigned URL
    *
-   * @param {string} filePath - Path to compressed artifacts file
-   * @param {Object} metadata - Artifact metadata
-   * @returns {Promise<Object>} Upload response
+   * @param {Object} metadata - Test simulation metadata
+   * @returns {Promise<Object>} Response with presigned URL and upload key
    */
-  async uploadTestArtifacts(filePath, metadata) {
+  async initSimulateTest(metadata) {
     try {
-      logger.progress('Uploading test artifacts to BuildBear')
-
-      const fs = require('fs')
-      const path = require('path')
-
-      // Read and encode file as base64
-      const fileBuffer = await fs.promises.readFile(filePath)
-      const base64File = fileBuffer.toString('base64')
+      logger.progress('Initializing test simulation')
 
       const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
 
-      // Prepare the webhook payload according to the WebhookRequest interface
-      const webhookPayload = {
-        status: metadata.status || 'success', // Use "success" or "failed"
-        task: 'simulate_test',
+      const payload = {
+        task: 'init_simulate_test',
+        status: 'success',
         timestamp: new Date().toISOString(),
         payload: {
           runAttempt: process.env.GITHUB_RUN_ATTEMPT,
@@ -313,50 +304,159 @@ class BuildBearApiService {
           commitHash: github.context.sha,
           branch: github.context?.ref?.replace('refs/heads/', ''),
           author: github.context.actor,
-          message:
-            metadata.message ||
-            `Test artifacts uploaded at ${new Date().toISOString()}`,
-          testsArtifacts: {
-            filename: path.basename(filePath),
-            contentType: 'application/gzip',
-            data: base64File,
-            metadata: {
-              originalSize: metadata.originalSize || 0,
-              compressedSize: metadata.compressedSize || fileBuffer.length,
-              fileCount: metadata.fileCount || 0,
-              timestamp: metadata.timestamp || new Date().toISOString(),
-            },
-          },
+          message: metadata.message || 'Initializing test simulation',
         },
       }
 
-      // Send to backend with extended timeout for large uploads
       const url = `/ci/webhook/${this.apiToken}`
-      const response = await withRetry(
-        () =>
-          this.client.post(url, webhookPayload, {
-            timeout: 120000, // 2 minutes for large file uploads
-          }),
-        {
-          maxRetries: this.config.api.retryAttempts || 3,
-          baseDelay: 2000,
-          maxDelay: 15000,
-        }
-      )
+      const response = await withRetry(() => this.client.post(url, payload), {
+        maxRetries: this.config.api.retryAttempts || 3,
+        baseDelay: 1000,
+        maxDelay: 10000,
+      })
 
-      logger.success('Test artifacts uploaded successfully')
+      logger.success('Test simulation initialized successfully')
+      return {
+        url: response.data.url,
+        key: response.data.key,
+        deploymentId: response.data.deploymentId,
+      }
+    } catch (error) {
+      logger.debug('Failed to initialize test simulation', error)
+      throw new Error(
+        `Test simulation initialization failed: ${error.response?.data?.message || error.message}`
+      )
+    }
+  }
+
+  /**
+   * Upload file to presigned URL
+   *
+   * @param {string} presignedUrl - The presigned URL for upload
+   * @param {Buffer} fileBuffer - The file buffer to upload
+   * @returns {Promise<void>}
+   */
+  async uploadToPresignedUrl(presignedUrl, fileBuffer) {
+    try {
+      logger.progress('Uploading file to presigned URL')
+
+      // Use axios directly for PUT request to S3
+      const response = await axios.put(presignedUrl, fileBuffer, {
+        headers: {
+          'Content-Type': 'application/gzip',
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        timeout: 300000, // 5 minutes for large uploads
+      })
+
+      if (response.status !== 200 && response.status !== 204) {
+        throw new Error(`Upload failed with status ${response.status}`)
+      }
+
+      logger.success('File uploaded successfully to presigned URL')
+    } catch (error) {
+      logger.debug('Failed to upload to presigned URL', error)
+      throw new Error(
+        `Presigned URL upload failed: ${error.response?.data?.message || error.message}`
+      )
+    }
+  }
+
+  /**
+   * Trigger test simulation with upload key
+   *
+   * @param {string} uploadKey - The upload key from init_simulate_test
+   * @param {Object} metadata - Additional metadata
+   * @returns {Promise<Object>} Simulation response
+   */
+  async triggerSimulateTest(uploadKey, metadata) {
+    try {
+      logger.progress('Triggering test simulation')
+
+      const githubActionUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${github.context.runId}`
+
+      const payload = {
+        task: 'simulate_test',
+        status: 'success',
+        timestamp: new Date().toISOString(),
+        payload: {
+          runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+          runId: github.context.runId.toString(),
+          runNumber: github.context.runNumber,
+          repositoryName: github.context.repo.repo,
+          repositoryOwner: github.context.repo.owner,
+          actionUrl: githubActionUrl,
+          commitHash: github.context.sha,
+          branch: github.context?.ref?.replace('refs/heads/', ''),
+          author: github.context.actor,
+          message: metadata.message || 'Running test simulation',
+          uploadKey: uploadKey,
+        },
+      }
+
+      const url = `/ci/webhook/${this.apiToken}`
+      const response = await withRetry(() => this.client.post(url, payload), {
+        maxRetries: this.config.api.retryAttempts || 3,
+        baseDelay: 1000,
+        maxDelay: 10000,
+      })
+
+      logger.success('Test simulation triggered successfully')
       return {
         success: true,
-        uploadId: response.data.uploadId || `upload_${Date.now()}`,
+        simulationId: response.data.simulationId || `simulation_${Date.now()}`,
         message:
-          response.data.message || 'Test artifacts uploaded successfully',
+          response.data.message || 'Test simulation started successfully',
+      }
+    } catch (error) {
+      logger.debug('Failed to trigger test simulation', error)
+      throw new Error(
+        `Test simulation trigger failed: ${error.response?.data?.message || error.message}`
+      )
+    }
+  }
+
+  /**
+   * Send compressed test artifacts to backend using new presigned URL approach
+   *
+   * @param {string} filePath - Path to compressed artifacts file
+   * @param {Object} metadata - Artifact metadata
+   * @returns {Promise<Object>} Upload response
+   */
+  async uploadTestArtifacts(filePath, metadata) {
+    try {
+      logger.progress('Uploading test artifacts to BuildBear')
+
+      const fs = require('fs')
+
+      // Read file buffer
+      const fileBuffer = await fs.promises.readFile(filePath)
+
+      // Step 1: Initialize test simulation to get presigned URL
+      const initResponse = await this.initSimulateTest(metadata)
+      const { url: presignedUrl, key: uploadKey } = initResponse
+
+      // Step 2: Upload file to presigned URL
+      await this.uploadToPresignedUrl(presignedUrl, fileBuffer)
+
+      // Step 3: Trigger test simulation with upload key
+      const simulationResponse = await this.triggerSimulateTest(
+        uploadKey,
+        metadata
+      )
+
+      return {
+        success: true,
+        uploadKey,
+        deploymentId: initResponse.deploymentId,
+        simulationId: simulationResponse.simulationId,
+        message: simulationResponse.message,
         metadata,
       }
     } catch (error) {
       logger.debug('Failed to upload test artifacts', error)
-      throw new Error(
-        `Test artifact upload failed: ${error.response?.data?.message || error.message}`
-      )
+      throw new Error(`Test artifact upload failed: ${error.message}`)
     }
   }
 
