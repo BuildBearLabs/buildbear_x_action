@@ -347,7 +347,7 @@ class BuildBearApiService {
         },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
-        timeout: 300000, // 5 minutes for large uploads
+        timeout: 900000, // 5 minutes for large uploads
       })
 
       if (response.status !== 200 && response.status !== 204) {

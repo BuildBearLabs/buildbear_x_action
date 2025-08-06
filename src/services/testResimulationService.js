@@ -233,7 +233,7 @@ class TestResimulationService {
 
       // Validate file size
       const stats = await fs.stat(compressedFilePath)
-      const maxSize = this.config.files?.maxSize || 100 * 1024 * 1024 // 100MB default
+      const maxSize = this.config.files?.maxSize || 1000 * 1024 * 1024 // 100MB default
 
       if (stats.size > maxSize) {
         throw new Error(
