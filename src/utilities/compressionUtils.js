@@ -200,7 +200,7 @@ class CompressionUtils {
   }
 
   /**
-   * Compress a single file
+   * Compress a single file (optimized for large files)
    *
    * @param {string} filePath - Path to file to compress
    * @param {Object} fileMap - File map to populate
@@ -211,21 +211,28 @@ class CompressionUtils {
     try {
       const { compressionLevel = 6 } = options
 
-      // Read file content
-      const content = await fs.readFile(filePath, 'utf8')
-
-      // Calculate original hash for validation
-      const originalHash = this.calculateHash(content)
-
-      // Compress content
-      const compressed = await gzip(content, {
-        level: compressionLevel,
-      })
-
-      // Create relative path
+      // Get file stats to determine processing strategy
+      const stats = await fs.stat(filePath)
       const relativePath = this.getRelativePath(filePath, baseDir)
 
-      // Store compressed data
+      // For very large files (>100MB), use streaming compression
+      if (stats.size > 100 * 1024 * 1024) {
+        logger.debug(
+          `Large file detected: ${relativePath} (${this.formatBytes(stats.size)}), using streaming compression`
+        )
+        return await this.compressLargeFileStream(
+          filePath,
+          fileMap,
+          relativePath,
+          { compressionLevel }
+        )
+      }
+
+      // For smaller files, use the existing method
+      const content = await fs.readFile(filePath, 'utf8')
+      const originalHash = this.calculateHash(content)
+      const compressed = await gzip(content, { level: compressionLevel })
+
       fileMap[relativePath] = {
         content: compressed.toString('base64'),
         originalHash,
@@ -236,7 +243,6 @@ class CompressionUtils {
         ),
       }
 
-      // Validate compression immediately
       await this.validateFileCompression(fileMap[relativePath], content)
 
       logger.debug(
@@ -245,6 +251,83 @@ class CompressionUtils {
     } catch (error) {
       throw new Error(`Error compressing file ${filePath}: ${error.message}`)
     }
+  }
+
+  /**
+   * Compress large files using streaming approach
+   *
+   * @param {string} filePath - Path to file to compress
+   * @param {Object} fileMap - File map to populate
+   * @param {string} relativePath - Relative path for the file
+   * @param {Object} options - Compression options
+   */
+  async compressLargeFileStream(filePath, fileMap, relativePath, options = {}) {
+    const { compressionLevel = 6 } = options
+    const fs = require('fs')
+    const { pipeline } = require('stream/promises')
+    const crypto = require('crypto')
+
+    return new Promise(async (resolve, reject) => {
+      try {
+        const stats = await require('fs').promises.stat(filePath)
+
+        // Create streams
+        const readStream = fs.createReadStream(filePath)
+        const gzipStream = zlib.createGzip({ level: compressionLevel })
+        const hashStream = crypto.createHash('sha256')
+
+        const chunks = []
+        let originalSize = 0
+
+        // Hash the original content
+        const originalHashStream = crypto.createHash('sha256')
+        const originalReadStream = fs.createReadStream(filePath)
+
+        originalReadStream.on('data', (chunk) => {
+          originalHashStream.update(chunk)
+          originalSize += chunk.length
+        })
+
+        const originalHash = await new Promise((resolveHash) => {
+          originalReadStream.on('end', () => {
+            resolveHash(originalHashStream.digest('hex'))
+          })
+        })
+
+        // Compress the file
+        readStream.pipe(gzipStream)
+
+        gzipStream.on('data', (chunk) => {
+          chunks.push(chunk)
+        })
+
+        gzipStream.on('end', () => {
+          const compressed = Buffer.concat(chunks)
+
+          fileMap[relativePath] = {
+            content: compressed.toString('base64'),
+            originalHash,
+            originalSize: stats.size,
+            compressedSize: compressed.length,
+            compressionRatio: ((compressed.length / stats.size) * 100).toFixed(
+              2
+            ),
+            isLargeFile: true,
+          }
+
+          logger.debug(
+            `Compressed large file: ${relativePath} (${fileMap[relativePath].compressionRatio}% of original, ${this.formatBytes(stats.size)} -> ${this.formatBytes(compressed.length)})`
+          )
+
+          resolve()
+        })
+
+        gzipStream.on('error', reject)
+        readStream.on('error', reject)
+      } catch (error) {
+        reject(error)
+      }
+    })
   }
 
   /**
@@ -525,6 +608,31 @@ const compressBboutDirectory = async (sourceDir, outputDir) => {
   return compressionUtils.compressDirectory(sourceDir, outputDir)
 }
 
+// For bbOut.json file compression
+const compressBboutFile = async (sourceFile, outputDir) => {
+  const compressionUtils = new CompressionUtils()
+  const fs = require('fs').promises
+  const path = require('path')
+  const os = require('os')
+
+  // Create a temporary directory with the file
+  const tempDir = path.join(os.tmpdir(), 'temp-bbout-file')
+  await fs.mkdir(tempDir, { recursive: true })
+
+  const tempFilePath = path.join(tempDir, path.basename(sourceFile))
+  const content = await fs.readFile(sourceFile, 'utf8')
+  await fs.writeFile(tempFilePath, content, 'utf8')
+
+  try {
+    const result = await compressionUtils.compressDirectory(tempDir, outputDir)
+    await fs.rm(tempDir, { recursive: true, force: true })
+    return result
+  } catch (error) {
+    await fs.rm(tempDir, { recursive: true, force: true })
+    throw error
+  }
+}
+
 // Export class and singleton instance
 const compressionUtils = new CompressionUtils()
 
@@ -534,4 +642,5 @@ module.exports = {
   compressDirectory: compressionUtils.compressDirectory.bind(compressionUtils),
   decompressArchive: compressionUtils.decompressArchive.bind(compressionUtils),
   compressBboutDirectory, // For backward compatibility
+  compressBboutFile, // For bbOut.json file compression
 }
