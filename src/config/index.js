@@ -30,7 +30,7 @@ const baseConfig = {
   // API Configuration
   api: {
     baseUrl: process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io',
-    timeout: parseInt(process.env.API_TIMEOUT, 10) || 30000,
+    timeout: parseInt(process.env.API_TIMEOUT, 10) || 600000, // 10 minutes
     retryAttempts: parseInt(process.env.API_RETRY_ATTEMPTS, 10) || 3,
   },
 
