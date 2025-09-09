@@ -30,7 +30,7 @@ const baseConfig = {
   // API Configuration
   api: {
     baseUrl: process.env.BUILDBEAR_BASE_URL || 'https://api.buildbear.io',
-    timeout: parseInt(process.env.API_TIMEOUT, 10) || 30000,
+    timeout: parseInt(process.env.API_TIMEOUT, 10) || 600000, // 10 minutes
     retryAttempts: parseInt(process.env.API_RETRY_ATTEMPTS, 10) || 3,
   },
 
@@ -49,8 +49,8 @@ const baseConfig = {
 
   // File Processing
   files: {
-    maxSize: parseInt(process.env.MAX_FILE_SIZE, 10) || 100 * 1024 * 1024, // 100MB
-    compressionLevel: parseInt(process.env.COMPRESSION_LEVEL, 10) || 6,
+    maxSize: parseInt(process.env.MAX_FILE_SIZE, 10) || 1000 * 1024 * 1024, // 1000MB
+    compressionLevel: parseInt(process.env.COMPRESSION_LEVEL, 10) || 9,
   },
 }
 
