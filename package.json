@@ -21,7 +21,7 @@
     "build:dev": "ncc build src/main.js -o dist",
     "build:analyze": "ncc build src/main.js -o dist --minify --stats-out stats.json",
     "validate": "npm run format:check && npm run lint:check && npm run test:ci",
-    "precommit": "npm run format && npm run lint && npm run build && git add .",
+    "precommit": "npm run format && npm run lint && npm run build:dev && git add .",
     "prepare": "husky install",
     "clean": "rm -rf dist coverage node_modules/.cache",
     "security:audit": "npm audit --audit-level=moderate",
