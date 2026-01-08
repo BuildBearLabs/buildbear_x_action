@@ -23,7 +23,7 @@ outputs:
 
 runs:
   using: "node20"
-  main: "./src/main.js"
+  main: "./dist/index.js"
 
 branding:
   icon: "layers"

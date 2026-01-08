@@ -17,7 +17,7 @@
     "format:check": "prettier --check \"src/**/*.js\" \"*.js\"",
     "lint": "eslint src/**/*.js --fix",
     "lint:check": "eslint src/**/*.js",
-    "build": "ncc build src/main.js -o dist --minify",
+    "build": "ncc build src/main.js -o dist",
     "build:dev": "ncc build src/main.js -o dist",
     "build:analyze": "ncc build src/main.js -o dist --minify --stats-out stats.json",
     "validate": "npm run format:check && npm run lint:check && npm run test:ci",
